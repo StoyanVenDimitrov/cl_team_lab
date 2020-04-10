@@ -7,3 +7,9 @@ Resources:
 
 Related:
 - SciSpacy: [Paper](https://www.aclweb.org/anthology/W19-5034/), [Github](https://github.com/allenai/scispacy)
+
+## Getting started
+Load scicite data.
+```
+./get_data.sh
+```
