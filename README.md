@@ -20,5 +20,5 @@ Install development dependencies in virtual environment.
 ```
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.dev.txt
+pip install -r requirements.txt
 ```
