@@ -1,3 +1,4 @@
+nb-black==1.0.7
 jupyterlab==2.1.0
 pandas==0.23.4
 pandas-compat==0.1.1
