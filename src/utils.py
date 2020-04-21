@@ -4,8 +4,8 @@ from collections import defaultdict
 def split_into_sentences(text):
     """
     Splits a text into sentences.
-    :param text:
-    :return:
+    :param text: string, this should be a text with multiple sentences
+    :return: list, a list of strings (each is a sentence)
     """
     return text.split(". ")
 
@@ -13,13 +13,13 @@ def split_into_sentences(text):
 def remove_stopwords(text, stopwords_path):
     """
     Removes stopwords from a text.
-    :param text:
-    :param stopwords_path:
-    :return:
+    :param text: string, this can be a sentence or a text
+    :param stopwords_path: string, this should be the absolute path to the stopwords file
+    :return: string, the input text without the stopwords
     """
     if stopwords_path:
-        with open(stopwords_path, 'r') as f:
-            stopwords = f.read().split('\n')
+        with open(stopwords_path, "r") as f:
+            stopwords = f.read().split("\n")
         text = " ".join([w for w in text.split(" ") if w not in stopwords])
     return text
 
@@ -27,10 +27,10 @@ def remove_stopwords(text, stopwords_path):
 def get_word_frequencies(tokens, sort=False, descending=True):
     """
     Counts word frequencies in a text.
-    :param tokens:
-    :param sort:
-    :param descending:
-    :return:
+    :param tokens: list, this should be a list of strings (each being a single token)
+    :param sort: bool, set to True if the output list should be sorted
+    :param descending: bool, set to True if the output list should be sorted in a descending order
+    :return: dict, a list of tuples made up of (string, int), the string is the word and the integer its frequency
     """
     d = defaultdict(int)
 
@@ -86,6 +86,6 @@ def bow(text, threshold=None, min_occurrence=None, sort=True, stopwords_path=Non
 
     for i, b in enumerate(bow):
         print(sentences[i])
-        print(b, '\n')
+        print(b, "\n")
 
     return bow
