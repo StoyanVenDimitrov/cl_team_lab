@@ -32,7 +32,7 @@ class BOW:
     ...     "Mary and Samantha took the bus at the bus station"
     ... ]
     >>> BOW = BOW()
-    >>> bow = bow.generate(text)
+    >>> bow = BOW.generate(text)
     >>> import pprint
     >>> pprint.pprint(bow)
     [[1, 0, 1, 1, 0, 0, 0, 0, 0],
