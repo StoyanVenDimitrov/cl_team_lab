@@ -107,6 +107,7 @@ class BOW:
         """
         Function to generate bag-of-words representation of text.
         :param text: string, this should be the entire text in a document
+        :param top_n: int, number to choose the top words sorted word frequency list
         :param min_occurrence: int, minimum number of occurrences for words
         :param sort: bool, parameter for sorting word frequency
         :return: list: list of lists containing integers
