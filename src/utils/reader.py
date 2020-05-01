@@ -27,6 +27,7 @@ class SciciteReader:
     >>> print(len(scaffold_title_sentences))
     ... 91412
     """
+
     def __init__(self, data_dir):
         self.data_dir = data_dir
 
@@ -53,8 +54,14 @@ class SciciteReader:
         :param scaffold: string, choose from {'cite', 'title'}
         :return: list
         """
-        paths = {"cite": os.path.join(self.data_dir, "scaffolds", "cite-worthiness-scaffold-train.jsonl"),
-                 "title": os.path.join(self.data_dir, "scaffolds", "sections-scaffold-train.jsonl")}
+        paths = {
+            "cite": os.path.join(
+                self.data_dir, "scaffolds", "cite-worthiness-scaffold-train.jsonl"
+            ),
+            "title": os.path.join(
+                self.data_dir, "scaffolds", "sections-scaffold-train.jsonl"
+            ),
+        }
 
         file = paths[scaffold]
         with open(file, "r") as f:
