@@ -1,7 +1,11 @@
+"""
+Utils for preparing the training
+"""
+
 from collections import defaultdict
 import os
 
-
+# pylint:disable=bad-continuation, invalid-name
 class BOW:
     """Convert a collection of text documents to a matrix of token counts
 
@@ -51,6 +55,7 @@ class BOW:
         self.stopwords_lang = stopwords_lang
         self.stopwords_path = stopwords_path
         self.lowercase = lowercase
+        self.vocabulary = []
 
         stopwords_langs = ["en"]
 
@@ -67,7 +72,8 @@ class BOW:
             with open(self.stopwords_path, "r") as f:
                 self.stopwords = f.read().split("\n")
 
-    def split_into_sentences(self, text):
+    @staticmethod
+    def split_into_sentences(text):
         """
         Splits a text into sentences.
         :param text: string, this should be a text with multiple sentences
@@ -83,13 +89,16 @@ class BOW:
         """
         return " ".join([w for w in text.split(" ") if w not in self.stopwords])
 
-    def get_word_frequencies(self, tokens, sort=False, descending=True):
+    @staticmethod
+    def get_word_frequencies(tokens, sort=False, descending=True):
         """
         Counts word frequencies in a text.
         :param tokens: list, this should be a list of strings (each being a single token)
         :param sort: bool, set to True if the output list should be sorted
-        :param descending: bool, set to True if the output list should be sorted in a descending order
-        :return: dict, a list of tuples made up of (string, int), the string is the word and the integer its frequency
+        :param descending: bool, set to True if the output list
+                    should be sorted in a descending order
+        :return: dict, a list of tuples made up of (string, int),
+                    the string is the word and the integer its frequency
         """
         d = defaultdict(int)
 
@@ -133,18 +142,37 @@ class BOW:
 
         # pick the top n
         if top_n:
-            words = [w for w, _ in word_frequencies[:top_n]]
+            self.vocabulary = [w for w, _ in word_frequencies[:top_n]]
         else:
-            words = [w for w, _ in word_frequencies]
+            self.vocabulary = [w for w, _ in word_frequencies]
 
         # generate bag-of-words
         bow = []
         for sent in sentences:
-            row = [0] * len(words)
-            for i, w in enumerate(sent.lower().split(" ")):
-                idx = words.index(w) if w in words else None
-                if idx is not None:
-                    row[idx] += 1
+            row = self.vectorize(sent)
             bow.append(row)
 
         return bow
+
+    def vectorize(self, sentence):
+        """
+        build BOW vector from text/sentence
+        :param sentence: String
+        :return: list containing integers
+        """
+        row = []
+        if self.vocabulary:
+            row = [0] * len(self.vocabulary)
+            for _, w in enumerate(sentence.lower().split(" ")):
+                idx = self.vocabulary.index(w) if w in self.vocabulary else None
+                if idx is not None:
+                    row[idx] += 1
+            return row
+        print("Cannot build BOW vector, vocabulary is missing.")
+        return row
+
+    def get_dimensionality(self):
+        """
+        :return: dimensions of the BOW vector representations
+        """
+        return len(self.vocabulary)
