@@ -1,8 +1,10 @@
 black==19.10b0
 nb-black==1.0.7
-upyterlab==2.1.0
+jupyterlab==2.1.0
 pandas==0.23.4
 pandas-compat==0.1.1
 xai==0.0.5
+pylint
+pre-commit
 line-profiler==3.0.2
 Cython==0.29.16
