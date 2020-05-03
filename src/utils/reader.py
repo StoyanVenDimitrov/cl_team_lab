@@ -1,3 +1,4 @@
+"""Data readers"""
 import os
 import json
 
@@ -43,8 +44,8 @@ class SciciteReader:
         tdt = []
 
         for file in [train_file, dev_file, test_file]:
-            with open(file, "r") as f:
-                data = [json.loads(x) for x in list(f)]
+            with open(file, "r") as data_file:
+                data = [json.loads(x) for x in list(data_file)]
                 tdt.append(data)
         return tdt
 
@@ -64,8 +65,8 @@ class SciciteReader:
         }
 
         file = paths[scaffold]
-        with open(file, "r") as f:
-            data = [json.loads(x) for x in list(f)]
+        with open(file, "r") as scaffold_file:
+            data = [json.loads(x) for x in list(scaffold_file)]
         return data
 
     @staticmethod

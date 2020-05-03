@@ -5,6 +5,7 @@ Utils for preparing the training
 from collections import defaultdict
 import os
 
+
 # pylint:disable=bad-continuation, invalid-name
 class BOW:
     """Convert a collection of text documents to a matrix of token counts
@@ -128,13 +129,11 @@ class BOW:
                 tokens = self.remove_stopwords(text)
 
             sentences = self.split_into_sentences(text)
-
         if self.stopwords_path and self.input_type == "sentences":
             tokens = self.remove_stopwords(" ".join(sentences))
             tokens = tokens.split(" ")
         else:
             tokens = " ".join(sentences).split(" ")
-
         word_frequencies = self.get_word_frequencies(tokens, sort=sort)
 
         if min_occurrence:
@@ -145,13 +144,11 @@ class BOW:
             self.vocabulary = [w for w, _ in word_frequencies[:top_n]]
         else:
             self.vocabulary = [w for w, _ in word_frequencies]
-
         # generate bag-of-words
         bow = []
         for sent in sentences:
             row = self.vectorize(sent)
             bow.append(row)
-
         return bow
 
     def vectorize(self, sentence):
