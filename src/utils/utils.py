@@ -65,7 +65,7 @@ class BOW:
                 os.path.dirname(__file__),
                 os.pardir,
                 os.pardir,
-                "data",
+                "resources",
                 f"stopwords_{self.stopwords_lang}.txt",
             )
 
