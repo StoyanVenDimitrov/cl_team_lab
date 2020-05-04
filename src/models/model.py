@@ -10,11 +10,10 @@ class Model:
         self.number_of_epochs = n_epochs
 
     @abc.abstractmethod
-    def train(self, training_inputs, training_labels):
+    def train(self, training_inputs):
         """
         do the training on train set
-        :param training_inputs: list of lists: feature vectors from input strings
-        :param training_labels: list of strings: labels
+        :param training_inputs: list of (feature vector, label) from input set
         :return: weights
         """
         return

@@ -32,15 +32,25 @@ def train(dataset):
     train_set, dev_set, test_set = reader.load_tdt()
     # init feature extractor
     bow = BOW(stopwords_path="resources/stopwords_en.txt")
-    # init classifier
-    dim = bow.get_dimensionality()
-    model = Perceptron(0.01, 5, dim)
 
-    # build training set
+    # build vectorized training set
     text = [sample["string"] for sample in train_set]
-    train_set_inputs = bow.generate(text, min_occurrence=30)
+    bow.generate(text, min_occurrence=200)
     train_set_labels = [sample["label"] for sample in train_set]
-    assert len(train_set_inputs) == len(train_set_labels)
+    all_labels = set(train_set_labels)
+
+    train_set_inputs = [
+        (
+            bow.vectorize(sample["string"]),
+            bow.vectorize_labels(all_labels, sample["label"]),
+        )
+        for sample in train_set
+    ]
+
+    # init classifier
+    dim = (bow.get_dimensionality(), len(set(train_set_labels)))
+    model = Perceptron(1, 5, dim)
+    print(model.train(train_set_inputs))
 
 
 if __name__ == "__main__":

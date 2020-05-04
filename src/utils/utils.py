@@ -144,12 +144,6 @@ class BOW:
             self.vocabulary = [w for w, _ in word_frequencies[:top_n]]
         else:
             self.vocabulary = [w for w, _ in word_frequencies]
-        # generate bag-of-words
-        bow = []
-        for sent in sentences:
-            row = self.vectorize(sent)
-            bow.append(row)
-        return bow
 
     def vectorize(self, sentence):
         """
@@ -173,3 +167,13 @@ class BOW:
         :return: dimensions of the BOW vector representations
         """
         return len(self.vocabulary)
+
+    @staticmethod
+    def vectorize_labels(label_set, label):
+        """
+        :param label: string
+        :param label_set: set of strings
+        :return: list, 1 on label position, else 0
+        """
+        vector = [1 if i == label else 0 for i in label_set]
+        return vector
