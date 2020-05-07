@@ -50,7 +50,11 @@ def train(dataset):
     # init classifier
     dim = (bow.get_dimensionality(), len(set(train_set_labels)))
     model = Perceptron(1, 5, dim)
-    print(model.train(train_set_inputs))
+
+    # predict
+    vector_input = bow.vectorize(text[0])
+    prediction_vector = model.predict(vector_input)
+    print(bow.decode_labels(all_labels, prediction_vector))
 
 
 if __name__ == "__main__":
