@@ -26,3 +26,19 @@ class Model:
         :return: class
         """
         return
+
+    @abc.abstractmethod
+    def save_model(self, model=None):
+        """
+        save the model to reuse it for inference
+        :return:
+        """
+        return
+
+    @abc.abstractmethod
+    def load_model(self, path):
+        """
+        load saved model
+        :return: model
+        """
+        return

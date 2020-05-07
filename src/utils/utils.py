@@ -177,3 +177,15 @@ class BOW:
         """
         vector = [1 if i == label else 0 for i in label_set]
         return vector
+
+    @staticmethod
+    def decode_labels(label_set, encoding_vector):
+        """
+        :param label_set:
+        :param encoding_vector: list: 1 on place of the label in label_set
+        :return: string: label name
+        """
+        for i, label in enumerate(label_set):
+            if encoding_vector[i] == 1:
+                return label
+        return None

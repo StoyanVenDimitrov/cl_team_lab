@@ -1,6 +1,8 @@
 """
 Simple perceptron algorithm
 """
+import pickle
+import os
 from src.models.model import Model
 
 
@@ -19,19 +21,47 @@ class Perceptron(Model):
             [0.0 for _ in range(dimensionality[0] + 1)]
             for _ in range(dimensionality[1])
         ]
+        # TODO: must be in the config file
+        self.model_path = "saved_models/classifiers/"
+        self.load_model(self.model_path)
 
     # Estimate Perceptron weights using stochastic gradient descent
     def train(self, training_inputs):
-        """
-        do the training on train set
-        :param training_inputs: list of (feature vector, label) from input set
-        :return: weights
-        """
         for _ in range(self.number_of_epochs):
             for row in training_inputs:
                 self.weight_update(row)
-
+        self.save_model()
         return self.weights
+
+    def predict(self, sent_representation):
+        score_list = []
+        for weights in self.weights:
+            activation = self.predict_binary(sent_representation, weights)
+            score_list.append(activation)
+        argmax = score_list.index(max(score_list))
+        labels = [0 for _ in score_list]
+        labels[argmax] = 1
+        return labels
+
+    def save_model(self, model=None):
+        """simply save the weights"""
+        if not os.path.exists(self.model_path):
+            os.makedirs(self.model_path)
+        filename = os.path.join(
+            self.model_path, "{}.pickle".format(self.__class__.__name__)
+        )
+        pickle.dump(self.weights, open(filename, "wb"))
+        print("Model saved for ", self.__class__.__name__)
+
+    def load_model(self, path):
+        try:
+            filename = os.path.join(
+                self.model_path, "{}.pickle".format(self.__class__.__name__)
+            )
+            self.weights = pickle.load(open(filename, "rb"))
+            print("Model loaded for ", self.__class__.__name__)
+        except FileNotFoundError:
+            print("You start with a fresh model for ", self.__class__.__name__)
 
     def weight_update(self, row):
         """
@@ -50,21 +80,6 @@ class Perceptron(Model):
                 self.weights[i][j + 1] = (
                     self.weights[i][j + 1] + self.learning_rate * error * row[0][j]
                 )
-
-    def predict(self, sent_representation):
-        """
-        predict on multi-class
-        :param sent_representation:
-        :return: list: 1 on position of class, else 0s
-        """
-        score_list = []
-        for weights in self.weights:
-            activation = self.predict_binary(sent_representation, weights)
-            score_list.append(activation)
-        argmax = score_list.index(max(score_list))
-        labels = [0 for _ in score_list]
-        labels[argmax] = 1
-        return labels
 
     # Make a BINARY prediction with weights
     @staticmethod
