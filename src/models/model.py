@@ -5,9 +5,10 @@ import abc
 class Model:
     """Abstract class for classifiers"""
 
-    def __init__(self, l_rate, n_epochs):
-        self.learning_rate = l_rate
-        self.number_of_epochs = n_epochs
+    def __init__(self, config):
+        self.learning_rate = int(config['learning_rate'])
+        self.number_of_epochs = int(config['number_of_epochs'])
+        self.model_path = config['model_path']
 
     @abc.abstractmethod
     def train(self, training_inputs):

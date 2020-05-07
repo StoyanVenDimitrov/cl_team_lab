@@ -11,8 +11,8 @@ class Perceptron(Model):
     Implementation from scratch
     """
 
-    def __init__(self, l_rate, n_epochs, dimensionality):
-        super().__init__(l_rate, n_epochs)
+    def __init__(self, config, dimensionality):
+        super().__init__(config)
         # each row represents one perceptron; first weights dimension is bias
         # VERY F***ING IMPORTANT:
         # self.weights = [0.0 for _ in range(dimensionality[0] + 1)]*dimensionality[1]
@@ -22,7 +22,7 @@ class Perceptron(Model):
             for _ in range(dimensionality[1])
         ]
         # TODO: must be in the config file
-        self.model_path = "saved_models/classifiers/"
+        # self.model_path = "saved_models/classifiers/"
         self.load_model(self.model_path)
 
     # Estimate Perceptron weights using stochastic gradient descent

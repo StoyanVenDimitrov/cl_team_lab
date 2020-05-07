@@ -2,14 +2,18 @@ from src.utils.utils import BOW
 from src.utils.reader import SciciteReader
 from src.utils.reader import SciciteReader
 from src.models.perceptron import Perceptron
+import configparser
 
 # pylint:skip-file
 
+config = configparser.ConfigParser()
+config.read('configs/default.conf')
+
 
 class Trainer:
-    def __init__(self, bow, model):
-        self.bow = bow
-        self.model = model
+    def __init__(self, vectorizer, classifier):
+        self.vectorizer = vectorizer
+        self.classifier = classifier
 
     def vectorize_data(self, data):
         pass
@@ -49,7 +53,8 @@ def train(dataset):
 
     # init classifier
     dim = (bow.get_dimensionality(), len(set(train_set_labels)))
-    model = Perceptron(1, 5, dim)
+    model = Perceptron(config['classifier'], dim)
+    model.train(train_set_inputs)
 
     # predict
     vector_input = bow.vectorize(text[0])
