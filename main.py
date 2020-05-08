@@ -1,7 +1,11 @@
-from src.utils.utils import BOW
+from src.utils.utils import load_config
+from src.utils.bow import BOW
+from src.utils.utils import make_filename
 from src.utils.reader import SciciteReader
 from src.utils.reader import SciciteReader
 from src.models.perceptron import Perceptron
+
+import os
 
 # pylint:skip-file
 
@@ -27,6 +31,11 @@ def train(dataset):
     train with dataset
     :return:
     """
+    root = os.path.join(os.path.abspath(__file__), os.pardir, os.pardir)
+    # load config
+    config_file = os.path.join(root, "configs", "default.conf")
+    config = load_config(config_file)
+
     # prepare data
     reader = SciciteReader(dataset)
     train_set, dev_set, test_set = reader.load_tdt()
@@ -35,7 +44,15 @@ def train(dataset):
 
     # build vectorized training set
     text = [sample["string"] for sample in train_set]
-    bow.generate(text, min_occurrence=200)
+
+    # generate or load bow model
+    filename = make_filename(config["features"])
+    filename = os.path.join(root, "saved_models", "features", config["features"]["model"], filename)
+    if os.path.isfile(filename):
+        bow = bow.load_model(filename)
+    else:
+        bow.generate(text, config=config)
+    # bow.generate(text, min_occurrence=200)
     train_set_labels = [sample["label"] for sample in train_set]
     all_labels = set(train_set_labels)
 
@@ -46,6 +63,16 @@ def train(dataset):
         )
         for sample in train_set
     ]
+
+    # uncomment the following code to start mlflow
+    # with mlflow.start_run():
+    # TODO: log config
+    # TODO: move logging around training block
+    #     mlflow.log_metric("loss", loss)
+    #     p,r,f1 = get_metrics()
+    #     mlflow.log_metric("P", p)
+    #     mlflow.log_metric("R", r)
+    #     mlflow.log_metric("F1", f1)
 
     # init classifier
     dim = (bow.get_dimensionality(), len(set(train_set_labels)))
