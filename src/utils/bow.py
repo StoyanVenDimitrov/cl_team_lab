@@ -96,16 +96,14 @@ class BOW(FeatureExtractorModule):
         print("Cannot build BOW vector, vocabulary is missing.")
         return bow
 
-    def save_model(self):
+    def save_model(self, path):
         """
 
         :return:
         """
-        if not os.path.exists(self.model_path):
-            os.makedirs(self.model_path)
-        filename = os.path.join(
-            self.model_path, f"{self.__class__.__name__}.pickle")
-        pickle.dump(self.vocabulary, open(filename, "wb"))
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(os.path.dirname(path))
+        pickle.dump(self.vocabulary, open(path, "wb"))
         print("Model saved for ", self.__class__.__name__)
 
     def load_model(self, path):
@@ -115,9 +113,8 @@ class BOW(FeatureExtractorModule):
         :return:
         """
         try:
-            filename = os.path.join(
-                self.model_path, f"{self.__class__.__name__}.pickle")
-            self.vocabulary = pickle.load(open(filename, "rb"))
+            path = f"{path}.pickle"
+            self.vocabulary = pickle.load(open(path, "rb"))
             print("Model loaded for ", self.__class__.__name__)
         except FileNotFoundError:
             print("You start with a fresh model for ", self.__class__.__name__)
@@ -162,7 +159,7 @@ class BOW(FeatureExtractorModule):
 
         return d
 
-    def generate(self, text, config):
+    def generate(self, text, config, filename=None):
         """
         Function to generate bag-of-words representation of text.
         :param text: string, this should be the entire text in a document
@@ -197,7 +194,8 @@ class BOW(FeatureExtractorModule):
         else:
             self.vocabulary = [w for w, _ in word_frequencies]
 
-        self.save_model()
+        if filename:
+            self.save_model(filename)
 
     def get_dimensionality(self):
         """

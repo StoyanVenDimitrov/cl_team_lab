@@ -47,11 +47,11 @@ def train(dataset):
 
     # generate or load bow model
     filename = make_filename(config["features"])
-    filename = os.path.join(root, "saved_models", "features", config["features"]["model"], filename)
-    if os.path.isfile(filename):
-        bow = bow.load_model(filename)
+    path = os.path.join(root, "saved_models", "features", config["features"]["model"], filename)
+    if os.path.isfile(path):
+        bow = bow.load_model(path)
     else:
-        bow.generate(text, config=config)
+        bow.generate(text, config=config, filename=path)
     # bow.generate(text, min_occurrence=200)
     train_set_labels = [sample["label"] for sample in train_set]
     all_labels = set(train_set_labels)
