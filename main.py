@@ -6,6 +6,8 @@ from src.utils.reader import SciciteReader
 from src.models.perceptron import Perceptron
 
 import os
+import argparse
+import mlflow
 
 # pylint:skip-file
 
@@ -85,5 +87,12 @@ def train(dataset):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--do_train", required=True, default=False, help="Set to True if training, else set to False.")
+    parser.add_argument("--do_test", required=False, default=False, help="Set to True if testing, else set to False.")
+
     # init trainer
     train("data/scicite/")
+
+    # TODO FLAGS
