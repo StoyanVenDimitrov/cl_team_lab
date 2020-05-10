@@ -4,7 +4,9 @@ import abc
 class FeatureExtractorModule:
     """Abstract class for feature extractors."""
 
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
+        self.model_path = config['model_path']
         pass
 
     @abc.abstractmethod
@@ -17,7 +19,7 @@ class FeatureExtractorModule:
         return
 
     @abc.abstractmethod
-    def save_model(self):
+    def save_model(self, model=None):
         """
         save the model to reuse it for inference
         :return:

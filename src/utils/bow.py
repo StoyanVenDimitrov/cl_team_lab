@@ -52,15 +52,15 @@ class BOW(FeatureExtractorModule):
 
     def __init__(
         self,
+        config,
         input_type="sentences",
-        stopwords_lang="en",
-        stopwords_path=None,
-        lowercase=True,
+        stopwords_lang="en"
     ):
+        super().__init__(config)
         self.input_type = input_type
         self.stopwords_lang = stopwords_lang
-        self.stopwords_path = stopwords_path
-        self.lowercase = lowercase
+        self.stopwords_path = config['stopwords_path']
+        self.lowercase = config['lowercase']
 
         self.vocabulary = []
 
@@ -78,6 +78,7 @@ class BOW(FeatureExtractorModule):
         if self.stopwords_path:
             with open(self.stopwords_path, "r") as f:
                 self.stopwords = f.read().split("\n")
+        self.load_model(self.model_path)
 
     def vectorize(self, sentence):
         """
@@ -96,14 +97,17 @@ class BOW(FeatureExtractorModule):
         print("Cannot build BOW vector, vocabulary is missing.")
         return bow
 
-    def save_model(self, path):
+    def save_model(self, model=None):
         """
 
         :return:
         """
-        if not os.path.exists(os.path.dirname(path)):
-            os.makedirs(os.path.dirname(path))
-        pickle.dump(self.vocabulary, open(path, "wb"))
+        if not os.path.exists(os.path.dirname(self.model_path)):
+            os.makedirs(os.path.dirname(self.model_path))
+        filename = os.path.join(
+            self.model_path, "{}.pickle".format(self.__class__.__name__)
+        )
+        pickle.dump(self.vocabulary, open(filename, "wb"))
         print("Model saved for ", self.__class__.__name__)
 
     def load_model(self, path):
@@ -159,16 +163,29 @@ class BOW(FeatureExtractorModule):
 
         return d
 
-    def generate(self, text, config, filename=None):
+    def generate(self, text):
         """
         Function to generate bag-of-words representation of text.
+        :param filename:
         :param text: string, this should be the entire text in a document
         :param config: ConfigParser object
         :return: list: list of lists containing integers
         """
-        top_n = config["features"]["top_n"] if "top_n" in config["features"]["model"] else None
-        min_occurrence = config["features"]["min_occurrence"] if "min_occurrence" in config["features"]["model"] else None
-        sort = config["features"]["sort"] if "sort" in config["features"]["model"] else None
+        top_n = (
+            float(self.config["top_n"])
+            if "top_n" in self.config
+            else None
+        )
+        min_occurrence = (
+            int(self.config["min_occurrence"])
+            if "min_occurrence" in self.config
+            else None
+        )
+        sort = (
+            self.config["sort"]
+            if "sort" in self.config
+            else None
+        )
 
         if self.input_type == "sentences":
             sentences = [t.lower() for t in text]
@@ -185,17 +202,20 @@ class BOW(FeatureExtractorModule):
         word_frequencies = self.get_word_frequencies(tokens, sort=sort)
 
         if min_occurrence:
-            word_frequencies = [x for x in word_frequencies if x[1] > config["features"]["min_occurrence"]]
+            word_frequencies = [
+                x
+                for x in word_frequencies
+                if x[1] > min_occurrence
+            ]
 
         # pick the top n
         if top_n:
-            _n = int(len(word_frequencies)*top_n)
+            _n = int(len(word_frequencies) * top_n)
             self.vocabulary = [w for w, _ in word_frequencies[:_n]]
         else:
             self.vocabulary = [w for w, _ in word_frequencies]
-
-        if filename:
-            self.save_model(filename)
+        if self.model_path:
+            self.save_model()
 
     def get_dimensionality(self):
         """
