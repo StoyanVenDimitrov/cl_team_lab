@@ -35,14 +35,17 @@ class Perceptron(Model):
         return self.weights
 
     def predict(self, sent_representation):
-        score_list = []
-        for weights in self.weights:
-            activation = self.predict_binary(sent_representation, weights)
-            score_list.append(activation)
-        argmax = score_list.index(max(score_list))
-        labels = [0 for _ in score_list]
-        labels[argmax] = 1
-        return labels
+        try:
+            score_list = []
+            for weights in self.weights:
+                activation = self.predict_binary(sent_representation, weights)
+                score_list.append(activation)
+            argmax = score_list.index(max(score_list))
+            labels = [0 for _ in score_list]
+            labels[argmax] = 1
+            return labels
+        except ValueError:
+            raise ValueError('Cannot predict, model not found!')
 
     def save_model(self, model=None):
         """simply save the weights"""

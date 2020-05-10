@@ -3,6 +3,7 @@ Utils for preparing the training
 """
 
 from collections import defaultdict
+from collections import OrderedDict
 import os
 import pickle
 import configparser
@@ -63,6 +64,7 @@ class BOW(FeatureExtractorModule):
         self.lowercase = config['lowercase']
 
         self.vocabulary = []
+        self.all_labels = OrderedDict()  # simply using set messes up the order by loading
 
         stopwords_langs = ["en"]
 
@@ -80,91 +82,6 @@ class BOW(FeatureExtractorModule):
                 self.stopwords = f.read().split("\n")
         self.load_model(self.model_path)
 
-    def vectorize(self, sentence):
-        """
-        build BOW vector from sentence
-        :param sentence: String
-        :return: list containing integers
-        """
-        bow = []
-        if self.vocabulary:
-            bow = [0] * len(self.vocabulary)
-            for _, w in enumerate(sentence.lower().split(" ")):
-                idx = self.vocabulary.index(w) if w in self.vocabulary else None
-                if idx is not None:
-                    bow[idx] += 1
-            return bow
-        print("Cannot build BOW vector, vocabulary is missing.")
-        return bow
-
-    def save_model(self, model=None):
-        """
-
-        :return:
-        """
-        if not os.path.exists(os.path.dirname(self.model_path)):
-            os.makedirs(os.path.dirname(self.model_path))
-        filename = os.path.join(
-            self.model_path, "{}.pickle".format(self.__class__.__name__)
-        )
-        pickle.dump(self.vocabulary, open(filename, "wb"))
-        print("Model saved for ", self.__class__.__name__)
-
-    def load_model(self, path):
-        """
-
-        :param path:
-        :return:
-        """
-        try:
-            filename = os.path.join(
-                self.model_path, "{}.pickle".format(self.__class__.__name__)
-            )
-            self.vocabulary = pickle.load(open(filename, "rb"))
-            print("Model loaded for ", self.__class__.__name__)
-        except FileNotFoundError:
-            print("You start with a fresh model for ", self.__class__.__name__)
-
-    @staticmethod
-    def split_into_sentences(text):
-        """
-        Splits a text into sentences.
-        :param text: string, this should be a text with multiple sentences
-        :return: list, a list of strings (each is a sentence)
-        """
-        return text.split(". ")
-
-    def remove_stopwords(self, text):
-        """
-        Removes stopwords from a text.
-        :param text: string, this can be a sentence or a text
-        :return: string, the input text without the stopwords
-        """
-        return " ".join([w for w in text.split(" ") if w not in self.stopwords])
-
-    @staticmethod
-    def get_word_frequencies(tokens, sort=False, descending=True):
-        """
-        Counts word frequencies in a text.
-        :param tokens: list, this should be a list of strings (each being a single token)
-        :param sort: bool, set to True if the output list should be sorted
-        :param descending: bool, set to True if the output list
-                    should be sorted in a descending order
-        :return: dict, a list of tuples made up of (string, int),
-                    the string is the word and the integer its frequency
-        """
-        d = defaultdict(int)
-
-        for t in tokens:
-            d[t] += 1
-
-        if sort:
-            d = sorted(d.items(), key=lambda k: k[1], reverse=descending)
-        else:
-            d = list(d.items())
-
-        return d
-
     def generate(self, train_set):
         """
         Function to generate bag-of-words representation of text.
@@ -173,6 +90,8 @@ class BOW(FeatureExtractorModule):
         """
         print('+++ Generating a new model for ', self.__class__.__name__,'+++')
         text = [sample["string"] for sample in train_set]
+        train_set_labels = [sample["label"] for sample in train_set]
+        self.all_labels = OrderedDict.fromkeys(train_set_labels)
         top_n = (
             float(self.config["top_n"])
             if "top_n" in self.config
@@ -219,24 +138,108 @@ class BOW(FeatureExtractorModule):
         if self.model_path:
             self.save_model()
 
-    @staticmethod
-    def vectorize_labels(label_set, label):
+    def vectorize(self, sentence):
         """
-        :param label: string
-        :param label_set: set of strings
-        :return: list, 1 on label position, else 0
+        build BOW vector from sentence
+        :param sentence: String
+        :return: list containing integers
         """
-        vector = [1 if i == label else 0 for i in label_set]
-        return vector
+        bow = []
+        if self.vocabulary:
+            bow = [0] * len(self.vocabulary)
+            for _, w in enumerate(sentence.lower().split(" ")):
+                idx = self.vocabulary.index(w) if w in self.vocabulary else None
+                if idx is not None:
+                    bow[idx] += 1
+            return bow
+        print("Cannot build BOW vector, vocabulary is missing.")
+        return bow
+
+    def save_model(self, model=None):
+        """
+
+        :return:
+        """
+        if not os.path.exists(os.path.dirname(self.model_path)):
+            os.makedirs(os.path.dirname(self.model_path))
+        filename = os.path.join(
+            self.model_path, "{}.pickle".format(self.__class__.__name__)
+        )
+        pickle.dump({'model': self.vocabulary, 'label_set': self.all_labels}, open(filename, "wb"))
+        print("Model saved for ", self.__class__.__name__)
+
+    def load_model(self, path):
+        """
+
+        :param path:
+        :return:
+        """
+        try:
+            filename = os.path.join(
+                self.model_path, "{}.pickle".format(self.__class__.__name__)
+            )
+            dumped = pickle.load(open(filename, "rb"))
+            self.vocabulary = dumped['model']
+            self.all_labels = dumped['label_set']
+            print("Model loaded for ", self.__class__.__name__)
+        except FileNotFoundError:
+            print("You start with a fresh model for ", self.__class__.__name__)
 
     @staticmethod
-    def decode_labels(label_set, encoding_vector):
+    def split_into_sentences(text):
+        """
+        Splits a text into sentences.
+        :param text: string, this should be a text with multiple sentences
+        :return: list, a list of strings (each is a sentence)
+        """
+        return text.split(". ")
+
+    def remove_stopwords(self, text):
+        """
+        Removes stopwords from a text.
+        :param text: string, this can be a sentence or a text
+        :return: string, the input text without the stopwords
+        """
+        return " ".join([w for w in text.split(" ") if w not in self.stopwords])
+
+    @staticmethod
+    def get_word_frequencies(tokens, sort=False, descending=True):
+        """
+        Counts word frequencies in a text.
+        :param tokens: list, this should be a list of strings (each being a single token)
+        :param sort: bool, set to True if the output list should be sorted
+        :param descending: bool, set to True if the output list
+                    should be sorted in a descending order
+        :return: dict, a list of tuples made up of (string, int),
+                    the string is the word and the integer its frequency
+        """
+        d = defaultdict(int)
+
+        for t in tokens:
+            d[t] += 1
+
+        if sort:
+            d = sorted(d.items(), key=lambda k: k[1], reverse=descending)
+        else:
+            d = list(d.items())
+
+        return d
+
+    def vectorize_labels(self, label):
+        """
+        :param label: string
+        :return: list, 1 on label position, else 0
+        """
+        vector = [1 if i == label else 0 for i in self.all_labels]
+        return vector
+
+    def decode_labels(self, encoding_vector):
         """
         :param label_set:
         :param encoding_vector: list: 1 on place of the label in label_set
         :return: string: label name
         """
-        for i, label in enumerate(label_set):
+        for i, label in enumerate(self.all_labels):
             if encoding_vector[i] == 1:
                 return label
         return None

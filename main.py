@@ -31,17 +31,14 @@ class Trainer:
         reader = SciciteReader(config['trainer']['dataset'])
         self.train_set, self.dev_set, self.test_set = reader.load_tdt()
 
-    def vectorize_data(self, data):
-        return self.vectorizer.vectorize(data)
-
-    def train(self, training_data):
+    def train_feature_extractor(self, training_data):
         self.vectorizer.generate(training_data)
-        train_set_labels = [sample["label"] for sample in training_data]
-        all_labels = set(train_set_labels)
+
+    def train_classifier(self, training_data):
         train_set_inputs = [
             (
                 self.vectorizer.vectorize(sample["string"]),
-                self.vectorizer.vectorize_labels(all_labels, sample["label"]),
+                self.vectorizer.vectorize_labels(sample["label"]),
             )
             for sample in training_data
         ]
@@ -59,6 +56,24 @@ class Trainer:
 
     def evaluate(self):
         pass
+
+
+class Predictor:
+    def __init__(self):
+        # find the components of the trainer:
+        vectorizer_section = config[config['predictor']['vectorizer']]
+        classifier_section = config[config['predictor']['classifier']]
+        # find what to instantiate:
+        vectorizer_class = utils.import_module(vectorizer_section['module'])
+        classifier_class = utils.import_module(classifier_section['module'])
+        # instantiate objects of the wished components:
+        self.vectorizer = vectorizer_class(vectorizer_section)
+        self.classifier = classifier_class(classifier_section)
+
+    def predict(self, data):
+        input_vector = self.vectorizer.vectorize(data)
+        output_vector = self.classifier.predict(input_vector)
+        return self.vectorizer.decode_labels(output_vector)
 
 
 if __name__ == "__main__":
@@ -80,7 +95,8 @@ if __name__ == "__main__":
     reader = SciciteReader("data/scicite/")
     train_set, dev_set, test_set = reader.load_tdt()
     trainer = Trainer()
-    # init trainer
-    trainer.train(train_set)
+    trainer.train_feature_extractor(train_set)
 
+    predictor = Predictor()
+    print(predictor.predict("Set to True if testing, else set to False."))
     # TODO FLAGS
