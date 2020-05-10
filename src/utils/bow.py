@@ -117,8 +117,10 @@ class BOW(FeatureExtractorModule):
         :return:
         """
         try:
-            path = f"{path}.pickle"
-            self.vocabulary = pickle.load(open(path, "rb"))
+            filename = os.path.join(
+                self.model_path, "{}.pickle".format(self.__class__.__name__)
+            )
+            self.vocabulary = pickle.load(open(filename, "rb"))
             print("Model loaded for ", self.__class__.__name__)
         except FileNotFoundError:
             print("You start with a fresh model for ", self.__class__.__name__)
@@ -163,14 +165,14 @@ class BOW(FeatureExtractorModule):
 
         return d
 
-    def generate(self, text):
+    def generate(self, train_set):
         """
         Function to generate bag-of-words representation of text.
-        :param filename:
-        :param text: string, this should be the entire text in a document
-        :param config: ConfigParser object
+        :param train_set: training set of content-label pairs
         :return: list: list of lists containing integers
         """
+        print('+++ Generating a new model for ', self.__class__.__name__,'+++')
+        text = [sample["string"] for sample in train_set]
         top_n = (
             float(self.config["top_n"])
             if "top_n" in self.config
@@ -216,12 +218,6 @@ class BOW(FeatureExtractorModule):
             self.vocabulary = [w for w, _ in word_frequencies]
         if self.model_path:
             self.save_model()
-
-    def get_dimensionality(self):
-        """
-        :return: dimensions of the BOW vector representations
-        """
-        return len(self.vocabulary)
 
     @staticmethod
     def vectorize_labels(label_set, label):
