@@ -11,22 +11,23 @@ class Perceptron(Model):
     Implementation from scratch
     """
 
-    def __init__(self, config, dimensionality):
+    def __init__(self, config):
         super().__init__(config)
-        # each row represents one perceptron; first weights dimension is bias
-        # VERY F***ING IMPORTANT:
-        # self.weights = [0.0 for _ in range(dimensionality[0] + 1)]*dimensionality[1]
-        # is not the same as:
-        self.weights = [
-            [0.0 for _ in range(dimensionality[0] + 1)]
-            for _ in range(dimensionality[1])
-        ]
+        self.weights = []
         # TODO: must be in the config file
         # self.model_path = "saved_models/classifiers/"
         self.load_model(self.model_path)
 
     # Estimate Perceptron weights using stochastic gradient descent
     def train(self, training_inputs):
+        print('+++ Training a new model for ', self.__class__.__name__, "+++")
+        # dimensions: len of vocabulary x len of labels()
+        dimensionality = training_inputs[0]
+        # each row represents one perceptron; first weights dimension is bias
+        self.weights = [
+            [0.0 for _ in range(len(dimensionality[0]) + 1)]
+            for _ in range(len(dimensionality[1]))
+        ]
         for _ in range(self.number_of_epochs):
             for row in training_inputs:
                 self.weight_update(row)
