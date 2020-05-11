@@ -1,12 +1,7 @@
-from src.utils.utils import load_config
-from src.utils.bow import BOW
 from src.utils import utils
-from src.utils.utils import make_filename
+from src.evaluation import custom_macro_f1_score
 from src.utils.reader import SciciteReader
-from src.utils.reader import SciciteReader
-from src.models.perceptron import Perceptron
 import configparser
-import os
 import argparse
 import mlflow
 
@@ -55,7 +50,14 @@ class Trainer:
         #     mlflow.log_metric("F1", f1)
 
     def evaluate(self):
-        pass
+        predicted, labeled = [], []
+        for sample in self.test_set:
+            input_vector = self.vectorizer.vectorize(sample['string'])
+            output_vector = self.classifier.predict(input_vector)
+            predicted.append(self.vectorizer.decode_labels(output_vector))
+            labeled.append(sample['label'])
+
+        return custom_macro_f1_score(predicted, labeled)
 
 
 class Predictor:
@@ -92,11 +94,10 @@ if __name__ == "__main__":
         help="Set to True if testing, else set to False.",
     )
 
-    reader = SciciteReader("data/scicite/")
-    train_set, dev_set, test_set = reader.load_tdt()
     trainer = Trainer()
-    trainer.train_feature_extractor(train_set)
+    # trainer.train_feature_extractor(train_set)
+    print(trainer.evaluate())
 
-    predictor = Predictor()
-    print(predictor.predict("Set to True if testing, else set to False."))
+    # predictor = Predictor()
+    # print(predictor.predict("Set to True if testing, else set to False."))
     # TODO FLAGS
