@@ -11,22 +11,23 @@ class Perceptron(Model):
     Implementation from scratch
     """
 
-    def __init__(self, l_rate, n_epochs, dimensionality):
-        super().__init__(l_rate, n_epochs)
-        # each row represents one perceptron; first weights dimension is bias
-        # VERY F***ING IMPORTANT:
-        # self.weights = [0.0 for _ in range(dimensionality[0] + 1)]*dimensionality[1]
-        # is not the same as:
-        self.weights = [
-            [0.0 for _ in range(dimensionality[0] + 1)]
-            for _ in range(dimensionality[1])
-        ]
+    def __init__(self, config):
+        super().__init__(config)
+        self.weights = []
         # TODO: must be in the config file
-        self.model_path = "saved_models/classifiers/"
+        # self.model_path = "saved_models/classifiers/"
         self.load_model(self.model_path)
 
     # Estimate Perceptron weights using stochastic gradient descent
     def train(self, training_inputs):
+        print('+++ Training a new model for ', self.__class__.__name__, "+++")
+        # dimensions: len of vocabulary x len of labels()
+        dimensionality = training_inputs[0]
+        # each row represents one perceptron; first weights dimension is bias
+        self.weights = [
+            [0.0 for _ in range(len(dimensionality[0]) + 1)]
+            for _ in range(len(dimensionality[1]))
+        ]
         for _ in range(self.number_of_epochs):
             for row in training_inputs:
                 self.weight_update(row)
@@ -34,14 +35,17 @@ class Perceptron(Model):
         return self.weights
 
     def predict(self, sent_representation):
-        score_list = []
-        for weights in self.weights:
-            activation = self.predict_binary(sent_representation, weights)
-            score_list.append(activation)
-        argmax = score_list.index(max(score_list))
-        labels = [0 for _ in score_list]
-        labels[argmax] = 1
-        return labels
+        try:
+            score_list = []
+            for weights in self.weights:
+                activation = self.predict_binary(sent_representation, weights)
+                score_list.append(activation)
+            argmax = score_list.index(max(score_list))
+            labels = [0 for _ in score_list]
+            labels[argmax] = 1
+            return labels
+        except ValueError:
+            raise ValueError('Cannot predict, model not found!')
 
     def save_model(self, model=None):
         """simply save the weights"""
