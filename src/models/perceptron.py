@@ -5,6 +5,7 @@ import pickle
 import os
 from src.models.model import Model
 import mlflow
+from tqdm import tqdm
 
 
 class Perceptron(Model):
@@ -30,7 +31,7 @@ class Perceptron(Model):
             [0.0 for _ in range(len(dimensionality[0]) + 1)]
             for _ in range(len(dimensionality[1]))
         ]
-        for _ in range(self.number_of_epochs):
+        for _ in tqdm(range(self.number_of_epochs)):
             for row in training_inputs:
                 self.weight_update(row)
         self.save_model()
