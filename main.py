@@ -8,28 +8,28 @@ import mlflow
 # pylint:skip-file
 
 config = configparser.ConfigParser()
-config.read('configs/default.conf')
+config.read("configs/default.conf")
 
 
 class Trainer:
     def __init__(self, params):
         self.params = params
         # find the components of the trainer:
-        vectorizer_section = config[config['trainer']['vectorizer']]
-        classifier_section = config[config['trainer']['classifier']]
+        vectorizer_section = config[config["trainer"]["vectorizer"]]
+        classifier_section = config[config["trainer"]["classifier"]]
         # find what to instantiate:
-        vectorizer_class = utils.import_module(vectorizer_section['module'])
-        classifier_class = utils.import_module(classifier_section['module'])
+        vectorizer_class = utils.import_module(vectorizer_section["module"])
+        classifier_class = utils.import_module(classifier_section["module"])
         # instantiate objects of the wished components:
         self.vectorizer = vectorizer_class(vectorizer_section)
         self.classifier = classifier_class(classifier_section, self.params)
 
-        self.reader = SciciteReader(config['trainer']['dataset'])
+        self.reader = SciciteReader(config["trainer"]["dataset"])
         self.train_set, self.dev_set, self.test_set = self.reader.load_tdt()
 
     def train_feature_extractor(self, training_data=None):
         if not training_data:
-            training_data = self.train_set+self.dev_set+self.test_set
+            training_data = self.train_set + self.dev_set + self.test_set
         self.vectorizer.generate(training_data)
 
     def train_classifier(self, training_data=None):
@@ -48,10 +48,10 @@ class Trainer:
     def evaluate(self):
         predicted, labeled = [], []
         for sample in self.test_set:
-            input_vector = self.vectorizer.vectorize(sample['string'])
+            input_vector = self.vectorizer.vectorize(sample["string"])
             output_vector = self.classifier.predict(input_vector)
             predicted.append(self.vectorizer.decode_labels(output_vector))
-            labeled.append(sample['label'])
+            labeled.append(sample["label"])
 
         macro_f1 = custom_macro_f1_score(predicted, labeled, self.params.log_metrics)
         micro_f1 = custom_micro_f1_score(predicted, labeled, self.params.log_metrics)
@@ -66,11 +66,11 @@ class Trainer:
 class Predictor:
     def __init__(self):
         # find the components of the trainer:
-        vectorizer_section = config[config['predictor']['vectorizer']]
-        classifier_section = config[config['predictor']['classifier']]
+        vectorizer_section = config[config["predictor"]["vectorizer"]]
+        classifier_section = config[config["predictor"]["classifier"]]
         # find what to instantiate:
-        vectorizer_class = utils.import_module(vectorizer_section['module'])
-        classifier_class = utils.import_module(classifier_section['module'])
+        vectorizer_class = utils.import_module(vectorizer_section["module"])
+        classifier_class = utils.import_module(classifier_section["module"])
         # instantiate objects of the wished components:
         self.vectorizer = vectorizer_class(vectorizer_section)
         self.classifier = classifier_class(classifier_section)
@@ -121,11 +121,11 @@ if __name__ == "__main__":
     if args.train:
         trainer.train_classifier()
     macro_f1, micro_f1 = trainer.evaluate()
-    print(f'Macro F1: {macro_f1}\nMicro F1: {micro_f1}')
+    print(f"Macro F1: {macro_f1}\nMicro F1: {micro_f1}")
 
     # if args.test:
-        # predictor = Predictor()
-        # print(predictor.predict("Set to True if testing, else set to False."))
+    # predictor = Predictor()
+    # print(predictor.predict("Set to True if testing, else set to False."))
 
     if args.log_metrics:
         mlflow.end_run()

@@ -50,21 +50,20 @@ class BOW(FeatureExtractorModule):
      [0, 2, 0, 0, 0, 1, 1, 1, 1]]
     """
 
-    def __init__(
-        self,
-        config,
-        input_type="sentences",
-        stopwords_lang="en"
-    ):
+    def __init__(self, config, input_type="sentences", stopwords_lang="en"):
         super().__init__(config)
         self.input_type = input_type
         self.stopwords_lang = stopwords_lang
-        self.stopwords_path = config['stopwords_path']
-        self.lowercase = (config['lowercase'] if 'lowercase' in config else None)
+        self.stopwords_path = config["stopwords_path"]
+        self.lowercase = config["lowercase"] if "lowercase" in config else None
 
-        self.filename = os.path.join(self.model_path, "{}.pickle".format(make_filename(self.config)))
+        self.filename = os.path.join(
+            self.model_path, "{}.pickle".format(make_filename(self.config))
+        )
         self.vocabulary = []
-        self.all_labels = OrderedDict()  # simply using set messes up the order by loading
+        self.all_labels = (
+            OrderedDict()
+        )  # simply using set messes up the order by loading
 
         if os.path.isfile(self.filename):
             self.load_model(self.model_path)
@@ -91,29 +90,25 @@ class BOW(FeatureExtractorModule):
         :return:
         """
         if os.path.isfile(self.filename):
-            print('+++ A model with that configuration already exists for ', self.__class__.__name__, '+++')
-            print('+++ Loaded model for ', self.__class__.__name__, '+++')
+            print(
+                "+++ A model with that configuration already exists for ",
+                self.__class__.__name__,
+                "+++",
+            )
+            print("+++ Loaded model for ", self.__class__.__name__, "+++")
             return
 
-        print('+++ Generating a new model for ', self.__class__.__name__,'+++')
+        print("+++ Generating a new model for ", self.__class__.__name__, "+++")
         text = [sample["string"] for sample in train_set]
         train_set_labels = [sample["label"] for sample in train_set]
         self.all_labels = OrderedDict.fromkeys(train_set_labels)
-        top_n = (
-            float(self.config["top_n"])
-            if "top_n" in self.config
-            else None
-        )
+        top_n = float(self.config["top_n"]) if "top_n" in self.config else None
         min_occurrence = (
             int(self.config["min_occurrence"])
             if "min_occurrence" in self.config
             else None
         )
-        sort = (
-            self.config["sort"]
-            if "sort" in self.config
-            else None
-        )
+        sort = self.config["sort"] if "sort" in self.config else None
 
         if self.input_type == "sentences":
             sentences = [t.lower() if self.lowercase else t for t in text]
@@ -130,11 +125,7 @@ class BOW(FeatureExtractorModule):
         word_frequencies = self.get_word_frequencies(tokens, sort=sort)
 
         if min_occurrence:
-            word_frequencies = [
-                x
-                for x in word_frequencies
-                if x[1] > min_occurrence
-            ]
+            word_frequencies = [x for x in word_frequencies if x[1] > min_occurrence]
 
         # pick the top n
         if top_n:
@@ -173,7 +164,10 @@ class BOW(FeatureExtractorModule):
         # filename = os.path.join(
         #     self.model_path, "{}.pickle".format(self.filename)
         # )
-        pickle.dump({'model': self.vocabulary, 'label_set': self.all_labels}, open(self.filename, "wb"))
+        pickle.dump(
+            {"model": self.vocabulary, "label_set": self.all_labels},
+            open(self.filename, "wb"),
+        )
         print("Model saved for ", self.__class__.__name__)
         print("Model path:", self.filename)
 
@@ -188,8 +182,8 @@ class BOW(FeatureExtractorModule):
             #     self.model_path, "{}.pickle".format(self.__class__.__name__)
             # )
             dumped = pickle.load(open(self.filename, "rb"))
-            self.vocabulary = dumped['model']
-            self.all_labels = dumped['label_set']
+            self.vocabulary = dumped["model"]
+            self.all_labels = dumped["label_set"]
             print("Model loaded for ", self.__class__.__name__)
         except FileNotFoundError:
             print("You start with a fresh model for ", self.__class__.__name__)

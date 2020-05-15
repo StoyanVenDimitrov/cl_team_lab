@@ -6,7 +6,7 @@ class FeatureExtractorModule:
 
     def __init__(self, config):
         self.config = config
-        self.model_path = config['model_path']
+        self.model_path = config["model_path"]
         pass
 
     @abc.abstractmethod

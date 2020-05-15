@@ -13,7 +13,9 @@ def build_confusion_matrix(predicted, labeled):
     :return: dict: number of overlaps between original and predicted labels, for each label
     """
     # initialize for {orig1: {pred1:number, ..}, orig2: {pred:number, ..}, ...}
-    label_types = set(labeled+predicted)  # TODO keys is the set of both preds and labels
+    label_types = set(
+        labeled + predicted
+    )  # TODO keys is the set of both preds and labels
     as_keys = sorted(list(label_types))
     conf_matrix = OrderedDict.fromkeys(as_keys)
     for l in conf_matrix.keys():
@@ -121,6 +123,7 @@ def dev_labels(filename):
         for obj in reader:
             labels.append(obj["label"])
     return labels
+
 
 # from sklearn.metrics import f1_score
 # label_list = dev_labels("data/scicite/dev.jsonl")

@@ -23,7 +23,7 @@ class Perceptron(Model):
 
     # Estimate Perceptron weights using stochastic gradient descent
     def train(self, training_inputs):
-        print('+++ Training a new model for ', self.__class__.__name__, "+++")
+        print("+++ Training a new model for ", self.__class__.__name__, "+++")
         # dimensions: len of vocabulary x len of labels()
         dimensionality = training_inputs[0]
         # each row represents one perceptron; first weights dimension is bias
@@ -48,7 +48,7 @@ class Perceptron(Model):
             labels[argmax] = 1
             return labels
         except ValueError:
-            raise ValueError('Cannot predict, model not found!')
+            raise ValueError("Cannot predict, model not found!")
 
     def save_model(self, model=None):
         """simply save the weights"""

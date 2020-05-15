@@ -6,9 +6,9 @@ class Model:
     """Abstract class for classifiers"""
 
     def __init__(self, config):
-        self.learning_rate = int(config['learning_rate'])
-        self.number_of_epochs = int(config['number_of_epochs'])
-        self.model_path = config['model_path']
+        self.learning_rate = int(config["learning_rate"])
+        self.number_of_epochs = int(config["number_of_epochs"])
+        self.model_path = config["model_path"]
 
     @abc.abstractmethod
     def train(self, training_inputs):

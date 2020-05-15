@@ -1,6 +1,7 @@
 import configparser
 import importlib
 
+
 def load_config(path):
     config = configparser.ConfigParser()
     config.read(path)
@@ -10,11 +11,11 @@ def load_config(path):
 def make_filename(config):
     filename = ""
     for i, para in enumerate(config):
-        sep = '&' if i > 0 else ''
-        if 'model_path' in para:
+        sep = "&" if i > 0 else ""
+        if "model_path" in para:
             continue
-        elif 'stopwords_path' in para:
-            stopwords = config[para].split('/')[-1].split('.')[0]
+        elif "stopwords_path" in para:
+            stopwords = config[para].split("/")[-1].split(".")[0]
             filename += f"{stopwords}-"
             continue
         filename += f"{sep}{para}={config[para]}"
@@ -36,12 +37,14 @@ def format_time(start_seconds, end_seconds):
     days, rem = divmod(seconds, 24 * 3600)
     hours, rem = divmod(rem, 3600)
     minutes, seconds = divmod(rem, 60)
-    return "Days:{:0>2} Hours:{:0>2} Minutes:{:0>2} Seconds:{:05.2f}".format(int(days), int(hours), int(minutes), seconds)
+    return "Days:{:0>2} Hours:{:0>2} Minutes:{:0>2} Seconds:{:05.2f}".format(
+        int(days), int(hours), int(minutes), seconds
+    )
 
 
 def get_log_dict(config):
     res = {}
     for sec in config:
-        for k,v in config[sec].items():
-            res[sec+"/"+k] = v
+        for k, v in config[sec].items():
+            res[sec + "/" + k] = v
     return res
