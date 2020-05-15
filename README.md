@@ -27,7 +27,7 @@ pip install -r requirements.txt
 ## Train model
 
 ```
-python main.py --do_train True
+python main.py --train True
 ```
 
 ## Visualize results
