@@ -4,6 +4,7 @@ Simple perceptron algorithm
 import pickle
 import os
 from src.models.model import Model
+import mlflow
 
 
 class Perceptron(Model):
@@ -11,8 +12,9 @@ class Perceptron(Model):
     Implementation from scratch
     """
 
-    def __init__(self, config):
+    def __init__(self, config, params):
         super().__init__(config)
+        self.params = params
         self.weights = []
         # TODO: must be in the config file
         # self.model_path = "saved_models/classifiers/"
@@ -77,6 +79,8 @@ class Perceptron(Model):
         labels = row[1]
         for i in range(len(row[1])):
             error = labels[i] - prediction[i]
+            if self.params.log_metrics:
+                mlflow.log_metric("Loss", error)
             # decreasing if wrong because error = -1 and increasing for error = 1,
             # otherwise unchanged
             self.weights[i][0] += self.learning_rate * error
