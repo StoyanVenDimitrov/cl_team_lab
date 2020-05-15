@@ -34,7 +34,7 @@ class Trainer:
 
     def train_classifier(self, training_data=None):
         if not training_data:
-            training_data = self.train_set[:5]
+            training_data = self.train_set
 
         train_set_inputs = [
             (
