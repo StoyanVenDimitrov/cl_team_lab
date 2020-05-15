@@ -36,4 +36,4 @@ Start MLflow UI
 ```
 mlflow ui
 ```
-and view it at [](http://localhost:5000/).
+and view it at [http://localhost:5000/](http://localhost:5000/).
