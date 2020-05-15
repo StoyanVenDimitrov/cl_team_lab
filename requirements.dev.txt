@@ -9,3 +9,4 @@ pylint
 pre-commit
 line-profiler==3.0.2
 Cython==0.29.16
+jsonlines==1.2.0
