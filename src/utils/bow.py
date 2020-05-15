@@ -6,7 +6,6 @@ from collections import defaultdict
 from collections import OrderedDict
 import os
 import pickle
-import configparser
 
 from src.utils.utils import make_filename
 from src.utils.feature_extractor import FeatureExtractorModule
@@ -61,33 +60,41 @@ class BOW(FeatureExtractorModule):
         self.input_type = input_type
         self.stopwords_lang = stopwords_lang
         self.stopwords_path = config['stopwords_path']
-        self.lowercase = config['lowercase']
+        self.lowercase = (config['lowercase'] if 'lowercase' in config else None)
 
+        self.filename = os.path.join(self.model_path, "{}.pickle".format(make_filename(self.config)))
         self.vocabulary = []
         self.all_labels = OrderedDict()  # simply using set messes up the order by loading
 
-        stopwords_langs = ["en"]
+        if os.path.isfile(self.filename):
+            self.load_model(self.model_path)
+        else:
+            stopwords_langs = ["en"]
 
-        if self.stopwords_lang in stopwords_langs and not self.stopwords_path:
-            self.stopwords_path = os.path.join(
-                os.path.dirname(__file__),
-                os.pardir,
-                os.pardir,
-                "resources",
-                f"stopwords_{self.stopwords_lang}.txt",
-            )
+            if self.stopwords_lang in stopwords_langs and not self.stopwords_path:
+                self.stopwords_path = os.path.join(
+                    os.path.dirname(__file__),
+                    os.pardir,
+                    os.pardir,
+                    "resources",
+                    f"stopwords_{self.stopwords_lang}.txt",
+                )
 
-        if self.stopwords_path:
-            with open(self.stopwords_path, "r") as f:
-                self.stopwords = f.read().split("\n")
-        self.load_model(self.model_path)
+            if self.stopwords_path:
+                with open(self.stopwords_path, "r") as f:
+                    self.stopwords = f.read().split("\n")
 
     def generate(self, train_set):
         """
         Function to generate bag-of-words representation of text.
         :param train_set: training set of content-label pairs
-        :return: list: list of lists containing integers
+        :return:
         """
+        if os.path.isfile(self.filename):
+            print('+++ A model with that configuration already exists for ', self.__class__.__name__, '+++')
+            print('+++ Loaded model for ', self.__class__.__name__, '+++')
+            return
+
         print('+++ Generating a new model for ', self.__class__.__name__,'+++')
         text = [sample["string"] for sample in train_set]
         train_set_labels = [sample["label"] for sample in train_set]
@@ -109,7 +116,7 @@ class BOW(FeatureExtractorModule):
         )
 
         if self.input_type == "sentences":
-            sentences = [t.lower() for t in text]
+            sentences = [t.lower() if self.lowercase else t for t in text]
         elif self.input_type == "text":
             if self.stopwords_path:
                 text = self.remove_stopwords(text)
@@ -147,7 +154,8 @@ class BOW(FeatureExtractorModule):
         bow = []
         if self.vocabulary:
             bow = [0] * len(self.vocabulary)
-            for _, w in enumerate(sentence.lower().split(" ")):
+            sentence = sentence.lower() if self.lowercase else sentence
+            for _, w in enumerate(sentence.split(" ")):
                 idx = self.vocabulary.index(w) if w in self.vocabulary else None
                 if idx is not None:
                     bow[idx] += 1
@@ -162,11 +170,12 @@ class BOW(FeatureExtractorModule):
         """
         if not os.path.exists(os.path.dirname(self.model_path)):
             os.makedirs(os.path.dirname(self.model_path))
-        filename = os.path.join(
-            self.model_path, "{}.pickle".format(self.__class__.__name__)
-        )
-        pickle.dump({'model': self.vocabulary, 'label_set': self.all_labels}, open(filename, "wb"))
+        # filename = os.path.join(
+        #     self.model_path, "{}.pickle".format(self.filename)
+        # )
+        pickle.dump({'model': self.vocabulary, 'label_set': self.all_labels}, open(self.filename, "wb"))
         print("Model saved for ", self.__class__.__name__)
+        print("Model path:", self.filename)
 
     def load_model(self, path):
         """
@@ -175,10 +184,10 @@ class BOW(FeatureExtractorModule):
         :return:
         """
         try:
-            filename = os.path.join(
-                self.model_path, "{}.pickle".format(self.__class__.__name__)
-            )
-            dumped = pickle.load(open(filename, "rb"))
+            # filename = os.path.join(
+            #     self.model_path, "{}.pickle".format(self.__class__.__name__)
+            # )
+            dumped = pickle.load(open(self.filename, "rb"))
             self.vocabulary = dumped['model']
             self.all_labels = dumped['label_set']
             print("Model loaded for ", self.__class__.__name__)
