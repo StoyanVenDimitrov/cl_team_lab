@@ -34,7 +34,7 @@ class Trainer:
 
     def train_classifier(self, training_data=None):
         if not training_data:
-            training_data = self.train_set
+            training_data = self.train_set[:100]
 
         train_set_inputs = [
             (
@@ -102,6 +102,12 @@ if __name__ == "__main__":
         default=True,
         help="Set to True if metrics should me logged with mlflow, else set to False.",
     )
+    parser.add_argument(
+        "--train_features",
+        required=False,
+        default=True,
+        help="Set to True if training features, else set to False.",
+    )
 
     args = parser.parse_args()
 
@@ -110,14 +116,16 @@ if __name__ == "__main__":
         mlflow.log_params(utils.get_log_dict(config))
 
     trainer = Trainer(args)
-    trainer.train_feature_extractor()
-    trainer.train_classifier()
+    if args.train_features:
+        trainer.train_feature_extractor()
+    if args.train:
+        trainer.train_classifier()
     macro_f1, micro_f1 = trainer.evaluate()
     print(f'Macro F1: {macro_f1}\nMicro F1: {micro_f1}')
 
-    # predictor = Predictor()
-    # print(predictor.predict("Set to True if testing, else set to False."))
-    # TODO FLAGS
+    # if args.test:
+        # predictor = Predictor()
+        # print(predictor.predict("Set to True if testing, else set to False."))
 
     if args.log_metrics:
         mlflow.end_run()
