@@ -23,3 +23,17 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## Train model
+
+```
+python main.py --do_train True
+```
+
+## Visualize results
+
+Start MLflow UI
+```
+mlflow ui
+```
+and view it at [](http://localhost:5000/).
