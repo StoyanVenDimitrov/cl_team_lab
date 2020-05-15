@@ -1,5 +1,5 @@
 from src.utils import utils
-from src.evaluation import custom_macro_f1_score
+from src.evaluation import custom_macro_f1_score, custom_micro_f1_score
 from src.utils.reader import SciciteReader
 import configparser
 import argparse
@@ -12,7 +12,8 @@ config.read('configs/default.conf')
 
 
 class Trainer:
-    def __init__(self):
+    def __init__(self, params):
+        self.params = params
         # find the components of the trainer:
         vectorizer_section = config[config['trainer']['vectorizer']]
         classifier_section = config[config['trainer']['classifier']]
@@ -21,15 +22,20 @@ class Trainer:
         classifier_class = utils.import_module(classifier_section['module'])
         # instantiate objects of the wished components:
         self.vectorizer = vectorizer_class(vectorizer_section)
-        self.classifier = classifier_class(classifier_section)
+        self.classifier = classifier_class(classifier_section, self.params)
 
-        reader = SciciteReader(config['trainer']['dataset'])
-        self.train_set, self.dev_set, self.test_set = reader.load_tdt()
+        self.reader = SciciteReader(config['trainer']['dataset'])
+        self.train_set, self.dev_set, self.test_set = self.reader.load_tdt()
 
-    def train_feature_extractor(self, training_data):
+    def train_feature_extractor(self, training_data=None):
+        if not training_data:
+            training_data = self.train_set+self.dev_set+self.test_set
         self.vectorizer.generate(training_data)
 
-    def train_classifier(self, training_data):
+    def train_classifier(self, training_data=None):
+        if not training_data:
+            training_data = self.train_set[:5]
+
         train_set_inputs = [
             (
                 self.vectorizer.vectorize(sample["string"]),
@@ -39,16 +45,6 @@ class Trainer:
         ]
         self.classifier.train(train_set_inputs)
 
-        # uncomment the following code to start mlflow
-        # with mlflow.start_run():
-        # TODO: log config
-        # TODO: move logging around training block
-        #     mlflow.log_metric("loss", loss)
-        #     p,r,f1 = get_metrics()
-        #     mlflow.log_metric("P", p)
-        #     mlflow.log_metric("R", r)
-        #     mlflow.log_metric("F1", f1)
-
     def evaluate(self):
         predicted, labeled = [], []
         for sample in self.test_set:
@@ -57,7 +53,14 @@ class Trainer:
             predicted.append(self.vectorizer.decode_labels(output_vector))
             labeled.append(sample['label'])
 
-        return custom_macro_f1_score(predicted, labeled)
+        macro_f1 = custom_macro_f1_score(predicted, labeled, self.params.log_metrics)
+        micro_f1 = custom_micro_f1_score(predicted, labeled, self.params.log_metrics)
+
+        if self.params.log_metrics:
+            mlflow.log_metric("Macro_F1", macro_f1)
+            mlflow.log_metric("Micro_F1", micro_f1)
+
+        return macro_f1, micro_f1
 
 
 class Predictor:
@@ -82,22 +85,39 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--do_train",
+        "--train",
         required=True,
         default=False,
         help="Set to True if training, else set to False.",
     )
     parser.add_argument(
-        "--do_test",
+        "--test",
         required=False,
         default=False,
         help="Set to True if testing, else set to False.",
     )
+    parser.add_argument(
+        "--log_metrics",
+        required=False,
+        default=True,
+        help="Set to True if metrics should me logged with mlflow, else set to False.",
+    )
 
-    trainer = Trainer()
-    # trainer.train_feature_extractor(train_set)
-    print(trainer.evaluate())
+    args = parser.parse_args()
+
+    if args.log_metrics:
+        mlflow.start_run()
+        mlflow.log_params(utils.get_log_dict(config))
+
+    trainer = Trainer(args)
+    trainer.train_feature_extractor()
+    trainer.train_classifier()
+    macro_f1, micro_f1 = trainer.evaluate()
+    print(f'Macro F1: {macro_f1}\nMicro F1: {micro_f1}')
 
     # predictor = Predictor()
     # print(predictor.predict("Set to True if testing, else set to False."))
     # TODO FLAGS
+
+    if args.log_metrics:
+        mlflow.end_run()
