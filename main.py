@@ -34,7 +34,7 @@ class Trainer:
 
     def train_classifier(self, training_data=None):
         if not training_data:
-            training_data = self.train_set[:100]
+            training_data = self.train_set
 
         train_set_inputs = [
             (
@@ -113,7 +113,7 @@ if __name__ == "__main__":
 
     if args.log_metrics:
         mlflow.start_run()
-        mlflow.log_params(utils.get_log_dict(config))
+        mlflow.log_params(utils.get_log_params(config))
 
     trainer = Trainer(args)
     if args.train_features:

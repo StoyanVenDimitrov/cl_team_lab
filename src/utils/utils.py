@@ -42,9 +42,9 @@ def format_time(start_seconds, end_seconds):
     )
 
 
-def get_log_dict(config):
-    res = {}
+def get_log_params(config):
+    params = {}
     for sec in config:
         for k, v in config[sec].items():
             res[sec + "/" + k] = v
-    return res
+    return params
