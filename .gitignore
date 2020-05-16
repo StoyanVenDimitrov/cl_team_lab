@@ -7,6 +7,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.idea/
 
 # C extensions
 *.so
@@ -111,3 +112,8 @@ dmypy.json
 
 # Data folders
 data/
+presentation/
+mlruns/
+old*
+saved_models/
+venv/
