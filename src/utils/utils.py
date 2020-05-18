@@ -46,5 +46,5 @@ def get_log_params(config):
     params = {}
     for sec in config:
         for k, v in config[sec].items():
-            res[sec + "/" + k] = v
+            params[sec + "/" + k] = v
     return params
