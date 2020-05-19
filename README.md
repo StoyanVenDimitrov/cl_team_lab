@@ -10,6 +10,7 @@ Resources:
 Related:
 - SciSpacy: [Paper](https://www.aclweb.org/anthology/W19-5034/), [Github](https://github.com/allenai/scispacy)
 - SciBERT: [Paper](https://www.aclweb.org/anthology/D19-1371.pdf), [Github](https://github.com/allenai/scibert)
+- SPECTER: [Paper](https://arxiv.org/pdf/2004.07180.pdf), [Github](https://github.com/allenai/specter)
 
 ## Getting started
 Load scicite data.
