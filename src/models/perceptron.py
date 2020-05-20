@@ -3,11 +3,11 @@ Simple perceptron algorithm
 """
 import pickle
 import os
+import random
 from src.models.model import Model
 from src import evaluation
 import mlflow
 from tqdm import tqdm
-
 
 
 class Perceptron(Model):
@@ -34,6 +34,7 @@ class Perceptron(Model):
             for _ in range(len(dimensionality[1]))
         ]
         for _ in tqdm(range(self.number_of_epochs)):
+            random.shuffle(training_inputs)
             for row in training_inputs:
                 self.weight_update(row)
             # evaluate after each epoch:
@@ -41,6 +42,7 @@ class Perceptron(Model):
             self.statistics['micro_f1'].append(micro_f1)
             self.statistics['macro_f1'].append(macro_f1)
         self.save_model()
+        print(self.statistics)
         return self.weights
 
     def predict(self, sent_representation):
