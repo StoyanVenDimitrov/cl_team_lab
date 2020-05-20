@@ -34,7 +34,7 @@ class Perceptron(Model):
             for _ in range(len(dimensionality[1]))
         ]
         for _ in tqdm(range(self.number_of_epochs)):
-            for row in training_inputs[:300]:
+            for row in training_inputs:
                 self.weight_update(row)
             # evaluate after each epoch:
             micro_f1, macro_f1 = self.evaluate_on_dev_set(dev_inputs)
