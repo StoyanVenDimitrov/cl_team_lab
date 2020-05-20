@@ -106,8 +106,8 @@ class Perceptron(Model):
         labels = row[1]
         for i in range(len(row[1])):
             error = labels[i] - prediction[i]
-            if self.params.log_metrics:
-                mlflow.log_metric("Loss", error)
+            # if self.params.log_metrics:
+            #     mlflow.log_metric("Loss", error)
             # decreasing if wrong because error = -1 and increasing for error = 1,
             # otherwise unchanged
             self.weights[i][0] += self.learning_rate * error

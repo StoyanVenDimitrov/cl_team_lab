@@ -54,7 +54,12 @@ class Trainer:
             for sample in dev_data
         ]
         self.classifier.train(train_set_inputs, dev_set_inputs)
-        self.classifier.get_train_statistics()
+        self.statistics = self.classifier.get_train_statistics()
+
+        if self.params.log_metrics:
+            for i in range(len(self.statistics["macro_f1"])):
+                mlflow.log_metric("Dev Macro F1", self.statistics["macro_f1"][i])
+                mlflow.log_metric("Dev Micro F1", self.statistics["micro_f1"][i])
 
     def evaluate(self):
         predicted, labeled = [], []
@@ -68,8 +73,8 @@ class Trainer:
         micro_f1 = custom_micro_f1_score(predicted, labeled, self.params.log_metrics)
 
         if self.params.log_metrics:
-            mlflow.log_metric("Macro_F1", macro_f1)
-            mlflow.log_metric("Micro_F1", micro_f1)
+            mlflow.log_metric("Test Macro F1", macro_f1)
+            mlflow.log_metric("Test Micro F1", micro_f1)
 
         return macro_f1, micro_f1
 
@@ -110,7 +115,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--log_metrics",
         required=False,
-        default=True,
+        default=False,
         help="Set to True if metrics should me logged with mlflow, else set to False.",
     )
     parser.add_argument(

@@ -1,7 +1,6 @@
 """Evaluation of predictions"""
 from collections import OrderedDict
 import jsonlines
-import mlflow
 
 
 # pylint:disable=invalid-name, arguments-out-of-order, not-an-iterable
@@ -48,11 +47,10 @@ def get_metrics(confusion_matrix):
     return tp, fn, fp
 
 
-def custom_macro_f1_score(predicted, labeled, log_metrics=False):
+def custom_macro_f1_score(predicted, labeled):
     """
     USED IN THE PAPER !!!
     macro F1 score for prediction results
-    :param log_metrics:
     :param predicted: list: labels the model predict for each sample
     :param labeled: list:  actual labels for sample
     :return: int: F1 score
@@ -76,16 +74,12 @@ def custom_macro_f1_score(predicted, labeled, log_metrics=False):
 
     macro_f1 = sum(f_1) / len(list(confusion_matrix.keys()))
 
-    if log_metrics:
-        mlflow.log_metric("Macro_F1", macro_f1)
-
     return macro_f1
 
 
-def custom_micro_f1_score(predicted, labeled, log_metrics=False):
+def custom_micro_f1_score(predicted, labeled):
     """
     F1 score for prediction results
-    :param log_metrics:
     :param predicted: list: labels the model predict for each sample
     :param labeled: list:  actual labels for sample
     :return: int: F1 score
@@ -103,9 +97,6 @@ def custom_micro_f1_score(predicted, labeled, log_metrics=False):
         recall = tp / (tp + fn)
 
         micro_f1 = 2 * ((precision * recall) / (precision + recall))
-
-        if log_metrics:
-            mlflow.log_metric("Micro_F1", micro_f1)
 
         return micro_f1
     except ZeroDivisionError:
