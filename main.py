@@ -32,9 +32,12 @@ class Trainer:
             training_data = self.train_set + self.dev_set + self.test_set
         self.vectorizer.generate(training_data)
 
-    def train_classifier(self, training_data=None):
+    def train_classifier(self, training_data=None, dev_data=None):
         if not training_data:
             training_data = self.train_set
+
+        if not dev_data:
+            dev_data = self.dev_set
 
         train_set_inputs = [
             (
@@ -43,7 +46,15 @@ class Trainer:
             )
             for sample in training_data
         ]
-        self.classifier.train(train_set_inputs)
+        dev_set_inputs = [
+            (
+                self.vectorizer.vectorize(sample["string"]),
+                self.vectorizer.vectorize_labels(sample["label"]),
+            )
+            for sample in dev_data
+        ]
+        self.classifier.train(train_set_inputs, dev_set_inputs)
+        self.classifier.get_train_statistics()
 
     def evaluate(self):
         predicted, labeled = [], []

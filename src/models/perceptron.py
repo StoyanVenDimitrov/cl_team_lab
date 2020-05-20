@@ -4,8 +4,10 @@ Simple perceptron algorithm
 import pickle
 import os
 from src.models.model import Model
+from src import evaluation
 import mlflow
 from tqdm import tqdm
+
 
 
 class Perceptron(Model):
@@ -22,7 +24,7 @@ class Perceptron(Model):
         self.load_model(self.model_path)
 
     # Estimate Perceptron weights using stochastic gradient descent
-    def train(self, training_inputs):
+    def train(self, training_inputs, dev_inputs):
         print("+++ Training a new model for ", self.__class__.__name__, "+++")
         # dimensions: len of vocabulary x len of labels()
         dimensionality = training_inputs[0]
@@ -32,8 +34,12 @@ class Perceptron(Model):
             for _ in range(len(dimensionality[1]))
         ]
         for _ in tqdm(range(self.number_of_epochs)):
-            for row in training_inputs:
+            for row in training_inputs[:300]:
                 self.weight_update(row)
+            # evaluate after each epoch:
+            micro_f1, macro_f1 = self.evaluate_on_dev_set(dev_inputs)
+            self.statistics['micro_f1'].append(micro_f1)
+            self.statistics['macro_f1'].append(macro_f1)
         self.save_model()
         return self.weights
 
@@ -49,6 +55,24 @@ class Perceptron(Model):
             return labels
         except ValueError:
             raise ValueError("Cannot predict, model not found!")
+
+    def evaluate_on_dev_set(self, dev_set):
+        """
+        evaluate the performance on dev set
+        :param dev_set:
+        :return:
+        """
+        predictions = []
+        true_labels = []
+        for sample in dev_set:
+            labels = self.predict(sample[0])
+            # take the indices of the predicted label instead of decoding it
+            predictions.append(labels.index(1))
+            true_labels.append(sample[1].index(1))
+        macro_f1 = evaluation.custom_macro_f1_score(predictions, true_labels)
+        micro_f1 = evaluation.custom_micro_f1_score(predictions, true_labels)
+
+        return micro_f1, macro_f1
 
     def save_model(self, model=None):
         """simply save the weights"""
