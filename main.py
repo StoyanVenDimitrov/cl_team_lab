@@ -69,8 +69,8 @@ class Trainer:
             predicted.append(self.vectorizer.decode_labels(output_vector))
             labeled.append(sample["label"])
 
-        macro_f1 = custom_macro_f1_score(predicted, labeled, self.params.log_metrics)
-        micro_f1 = custom_micro_f1_score(predicted, labeled, self.params.log_metrics)
+        macro_f1 = custom_macro_f1_score(predicted, labeled)
+        micro_f1 = custom_micro_f1_score(predicted, labeled)
 
         if self.params.log_metrics:
             mlflow.log_metric("Test Macro F1", macro_f1)

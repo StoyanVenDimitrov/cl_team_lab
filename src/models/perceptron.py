@@ -42,7 +42,6 @@ class Perceptron(Model):
             self.statistics['micro_f1'].append(micro_f1)
             self.statistics['macro_f1'].append(macro_f1)
         self.save_model()
-        print(self.statistics)
         return self.weights
 
     def predict(self, sent_representation):
