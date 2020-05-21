@@ -2,7 +2,7 @@
 
 Topic: Citation intent classification
 
-Based on SciCite ([Paper](https://www.aclweb.org/anthology/N19-1361.pdf)), ([Github](https://github.com/allenai/scicite)).
+Based on SciCite ([Paper](https://www.aclweb.org/anthology/N19-1361.pdf), [Github](https://github.com/allenai/scicite)).
 
 ## Getting started
 Load scicite data.
