@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections import OrderedDict
 import os
 import pickle
+import spacy
 
 from src.utils.utils import make_filename
 from src.utils.feature_extractor import FeatureExtractorModule
@@ -83,6 +84,9 @@ class BOW(FeatureExtractorModule):
                 with open(self.stopwords_path, "r") as f:
                     self.stopwords = f.read().split("\n")
 
+        if config["lemma"]:
+            self.nlp = spacy.load("en_core_web_sm")
+
     def generate(self, train_set):
         """
         Function to generate bag-of-words representation of text.
@@ -100,6 +104,11 @@ class BOW(FeatureExtractorModule):
 
         print("+++ Generating a new model for ", self.__class__.__name__, "+++")
         text = [sample["string"] for sample in train_set]
+
+        # lemmatize TODO: chemical names/abbreviations get split by spacy (e.g. "Fe-S")
+        if self.config["lemma"]:
+            text = [" ".join([t.lemma_ for t in self.nlp(s)]) for s in text]
+
         train_set_labels = [sample["label"] for sample in train_set]
         self.all_labels = OrderedDict.fromkeys(train_set_labels)
         top_n = float(self.config["top_n"]) if "top_n" in self.config else None

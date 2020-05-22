@@ -29,7 +29,9 @@ class Trainer:
 
     def train_feature_extractor(self, training_data=None):
         if not training_data:
-            training_data = self.train_set + self.dev_set + self.test_set
+            # training_data = self.train_set + self.dev_set + self.test_set
+            # training_data = self.dev_set + self.test_set
+            training_data = self.train_set
         self.vectorizer.generate(training_data)
 
     def train_classifier(self, training_data=None, dev_data=None):
@@ -58,8 +60,8 @@ class Trainer:
 
         if self.params.log_metrics:
             for i in range(len(self.statistics["macro_f1"])):
-                mlflow.log_metric("Dev Macro F1", self.statistics["macro_f1"][i])
-                mlflow.log_metric("Dev Micro F1", self.statistics["micro_f1"][i])
+                mlflow.log_metric("Dev Macro F1", self.statistics["macro_f1"][i], step=i)
+                mlflow.log_metric("Dev Micro F1", self.statistics["micro_f1"][i], step=i)
 
     def evaluate(self):
         predicted, labeled = [], []
@@ -128,7 +130,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.log_metrics:
-        mlflow.start_run()
+        mlflow.start_run(run_name=utils.get_run_name(config))
         mlflow.log_params(utils.get_log_params(config))
 
     trainer = Trainer(args)
