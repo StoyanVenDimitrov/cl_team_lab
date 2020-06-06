@@ -15,6 +15,10 @@ Install development dependencies in virtual environment.
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+python
+import nltk
+nltk.download('punkt')
+nltk.download('wordnet')
 ```
 
 ## Train model
@@ -30,3 +34,9 @@ Start MLflow UI
 mlflow ui
 ```
 and view it at [http://localhost:5000/](http://localhost:5000/).
+
+
+## Run Demo App
+```
+streamlit run app/demo.py
+```
