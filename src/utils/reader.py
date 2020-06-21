@@ -2,6 +2,7 @@
 import os
 import json
 import tensorflow_datasets as tfds
+import tensorflow as tf
 
 
 class SciciteReader:
@@ -148,15 +149,27 @@ class SciciteReader:
                 )
             else:
                 encoded_worthiness.append([-1])
-        return encoded_text, encoded_labels, encoded_sections, encoded_worthiness
-        # def gen_train_series():
-        #     for t, ts, ti in zip(
-        #             not_encoded_tokens,
-        #             encoded_labels,
-        #             encoded_sections,
-        #             encoded_worthiness
-        #     ):
-        #         yield t, {'dense': ts, 'dense_1': ti}
+
+        def gen_train_series():
+            for t, tl, ts, tw in zip(
+                    encoded_text,
+                    encoded_labels,
+                    encoded_sections,
+                    encoded_worthiness
+            ):
+                yield t, {'dense': tl, 'dense_1': ts, 'dense_2': tw}
+
+        series = tf.data.Dataset.from_generator(gen_train_series,
+                                                output_types=(
+                                                    tf.int32,
+                                                    {
+                                                        'dense': tf.int32,
+                                                        'dense_1': tf.int32,
+                                                        'dense_2': tf.int32
+                                                    }
+                                                    ),
+                                                )
+        return series, text_encoder, label_encoder, section_encoder, worthiness_encoder
 
     @staticmethod
     def read_sentences(data):
@@ -167,3 +180,6 @@ class SciciteReader:
         """
         k = "text" if "text" in data[0] else "string"
         return [d[k] for d in data]
+
+    def get_dimensions(self):
+        return len(self.vocab_set), len(self.labels_set), len(self.section_set), len(self.worthiness_set)
