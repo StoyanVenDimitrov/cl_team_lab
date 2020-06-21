@@ -1,6 +1,7 @@
 """Data readers"""
 import os
 import json
+import tensorflow_datasets as tfds
 
 
 class SciciteReader:
@@ -31,6 +32,11 @@ class SciciteReader:
 
     def __init__(self, data_dir):
         self.data_dir = data_dir
+        self.vocab_set = set()
+        self.section_set = set()
+        self.worthiness_set = set()
+        self.labels_set = set()
+        self.tokenizer = tfds.features.text.Tokenizer()
 
     def load_tdt(self):
         """
@@ -48,6 +54,20 @@ class SciciteReader:
                 data = [json.loads(x) for x in list(data_file)]
                 tdt.append(data)
         return tdt
+
+    def load_main_task_data(self):
+        """Loads train data for main task"""
+        train_file = os.path.join(self.data_dir, "train.jsonl")
+
+        with open(train_file, "r") as data_file:
+            data = [json.loads(x) for x in list(data_file)]
+        for sample in data:
+            tokens = self.tokenizer.tokenize(sample["string"])
+            self.vocab_set.update(tokens)
+            sample["tokens"] = tokens
+            self.labels_set.update([sample["label"]])
+            sample["relevant_key"] = "label"
+        return data
 
     def load_scaffold(self, scaffold):
         """
@@ -67,7 +87,76 @@ class SciciteReader:
         file = paths[scaffold]
         with open(file, "r") as scaffold_file:
             data = [json.loads(x) for x in list(scaffold_file)]
+        for sample in data:
+            if scaffold == "cite":
+                self.worthiness_set.update([str(sample["is_citation"])])
+                sample["relevant_key"] = "is_citation"
+            else:
+                self.section_set.update([sample["section_title"]])
+                sample["relevant_key"] = "section_title"
+            tokens = self.tokenizer.tokenize(sample["text"])
+            self.vocab_set.update(tokens)
+            sample["tokens"] = tokens
         return data
+
+    def load_multitask_data(self):
+
+        data = []
+
+        not_encoded_tokens = []
+        encoded_text = []
+        encoded_labels = []
+        encoded_sections = []
+        encoded_worthiness = []
+
+        for i, j, k in zip(
+            self.load_main_task_data(),
+            self.load_scaffold("cite"),
+            self.load_scaffold("title"),
+        ):
+            data.append(i)
+            data.append(j)
+            data.append(k)
+
+        text_encoder = tfds.features.text.TokenTextEncoder(self.vocab_set)
+        label_encoder = tfds.features.text.TokenTextEncoder(self.labels_set)
+        worthiness_encoder = tfds.features.text.TokenTextEncoder(self.worthiness_set)
+        section_encoder = tfds.features.text.TokenTextEncoder(self.section_set)
+
+        for sample in data:
+            if "text" in sample.keys():
+                encoded_text.append(text_encoder.encode(sample["text"]))
+            elif "string" in sample.keys():
+                encoded_text.append(text_encoder.encode(sample["string"]))
+            not_encoded_tokens.append(sample["tokens"])
+
+            relevant_key = sample["relevant_key"]
+
+            if relevant_key == "label":
+                encoded_labels.append(label_encoder.encode(sample["label"]))
+            else:
+                encoded_labels.append([-1])
+
+            if relevant_key == "section_title":
+                encoded_sections.append(section_encoder.encode(sample["section_title"]))
+            else:
+                encoded_sections.append([-1])
+
+            if relevant_key == "is_citation":
+                encoded_worthiness.append(
+                    worthiness_encoder.encode(str(sample["is_citation"]))
+                )
+            else:
+                encoded_worthiness.append([-1])
+        return encoded_text, encoded_labels, encoded_sections, encoded_worthiness
+        # def gen_train_series():
+        #     for t, ts, ti in zip(
+        #             not_encoded_tokens,
+        #             encoded_labels,
+        #             encoded_sections,
+        #             encoded_worthiness
+        #     ):
+        #         yield t, {'dense': ts, 'dense_1': ti}
 
     @staticmethod
     def read_sentences(data):
