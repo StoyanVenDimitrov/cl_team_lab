@@ -39,8 +39,8 @@ class Perceptron(Model):
                 self.weight_update(row)
             # evaluate after each epoch:
             micro_f1, macro_f1 = self.evaluate_on_dev_set(dev_inputs)
-            self.statistics['micro_f1'].append(micro_f1)
-            self.statistics['macro_f1'].append(macro_f1)
+            self.statistics["micro_f1"].append(micro_f1)
+            self.statistics["macro_f1"].append(macro_f1)
         self.save_model()
         return self.weights
 
@@ -65,6 +65,7 @@ class Perceptron(Model):
         """
         predictions = []
         true_labels = []
+        print(len(dev_set))
         for sample in dev_set:
             labels = self.predict(sample[0])
             # take the indices of the predicted label instead of decoding it

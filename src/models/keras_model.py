@@ -2,6 +2,7 @@
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from src.models.model import Model
+from tensorflow.keras import backend as K
 
 from src import evaluation
 
@@ -11,23 +12,21 @@ from src import evaluation
 class MultitaskLearner(Model):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
-    def __init__(self, config, vocab_set, label_set, section_set):
+    def __init__(self, config, vocab_size, labels_size, section_size, worthiness_size):
         super().__init__(config)
-        self.text_encoder = tfds.features.text.TokenTextEncoder(vocab_set)
-        self.label_encoder = tfds.features.text.TokenTextEncoder(label_set)
-        self.section_encoder = tfds.features.text.TokenTextEncoder(section_set)
         self.worthiness_encoder = tfds.features.text.TokenTextEncoder(2)
         self.create_model(
-            config["vocab_size"],
             config["embedding_dim"],
             config["rnn_units"],
-            config["label_size"],
-            config["intent_size"],
+            vocab_size,
+            labels_size,
+            section_size,
+            worthiness_size
         )
         self.mask_value = -1  # for masking missing labels
 
     def create_model(
-        self, vocab_size, embedding_dim, rnn_units, label_size, intent_size
+        self, embedding_dim, rnn_units, vocab_size, labels_size, section_size, worthiness_size
     ):
         text_input_layer = tf.keras.Input(
             shape=(None,), dtype=tf.string, name="Input_1"
@@ -49,19 +48,23 @@ class MultitaskLearner(Model):
             input_embedding
         )
         state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-        slot_output = tf.keras.layers.Dense(label_size + 1)(output)
-        intent_output = tf.keras.layers.Dense(intent_size + 1, activation="softmax")(
+        label_output = tf.keras.layers.Dense(labels_size + 1, activation="softmax")(
+            state_h
+        )
+        section_output = tf.keras.layers.Dense(section_size + 1, activation="softmax")(
+            state_h
+        )
+        worthiness_output = tf.keras.layers.Dense(worthiness_size + 1, activation="softmax")(
             state_h
         )
 
+
         self.model = tf.keras.Model(
-            inputs=text_input_layer, outputs=[slot_output, intent_output]
+            inputs=text_input_layer, outputs=[label_output, section_output, worthiness_output]
         )
 
         self.model.summary()
         tf.keras.utils.plot_model(
             self.model, to_file="multi_input_and_output_model.png", show_shapes=True
         )
-
-
     # https://www.dlology.com/blog/how-to-multi-task-learning-with-missing-labels-in-keras/

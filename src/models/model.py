@@ -8,7 +8,7 @@ class Model:
     def __init__(self, config):
         self.learning_rate = int(config["learning_rate"])
         self.number_of_epochs = int(config["number_of_epochs"])
-        self.statistics = {'macro_f1': [], 'micro_f1': []}
+        self.statistics = {"macro_f1": [], "micro_f1": []}
         self.model_path = config["model_path"]
 
     @abc.abstractmethod

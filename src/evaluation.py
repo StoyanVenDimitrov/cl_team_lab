@@ -118,7 +118,7 @@ def dev_labels(filename):
 
 # from sklearn.metrics import f1_score
 # label_list = dev_labels("data/scicite/dev.jsonl")
-# pred_list = ["method"] * len(label_list)
+# pred_list = ["background"] * len(label_list)
 # macro_f1 = custom_macro_f1_score(label_list, pred_list)
 # sk_macro_f1 = f1_score(label_list, pred_list, average="macro")
 # print("Macro F1:", macro_f1)
