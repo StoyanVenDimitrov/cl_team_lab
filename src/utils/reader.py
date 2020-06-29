@@ -66,8 +66,9 @@ class SciciteReader:
             tokens = self.tokenizer.tokenize(sample["string"])
             self.vocab_set.update(tokens)
             sample["tokens"] = tokens
-            self.labels_set.update([sample["label"]])
+            #self.labels_set.update([sample["label"]])
             sample["relevant_key"] = "label"
+            # sample["text"] = [sample["string"]]
         return data
 
     def load_scaffold(self, scaffold):
@@ -89,11 +90,12 @@ class SciciteReader:
         with open(file, "r") as scaffold_file:
             data = [json.loads(x) for x in list(scaffold_file)]
         for sample in data:
+            # sample["text"] = [sample["text"]]
             if scaffold == "cite":
-                self.worthiness_set.update([str(sample["is_citation"])])
+                # self.worthiness_set.update([str(sample["is_citation"])])
                 sample["relevant_key"] = "is_citation"
+                sample['is_citation'] = str(sample["is_citation"])
             else:
-                self.section_set.update([sample["section_title"]])
                 sample["relevant_key"] = "section_title"
             tokens = self.tokenizer.tokenize(sample["text"])
             self.vocab_set.update(tokens)
@@ -119,12 +121,21 @@ class SciciteReader:
             data.append(j)
             data.append(k)
 
+        # text_encoder = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
         text_encoder = tfds.features.text.TokenTextEncoder(self.vocab_set)
-        label_encoder = tfds.features.text.TokenTextEncoder(self.labels_set)
-        worthiness_encoder = tfds.features.text.TokenTextEncoder(self.worthiness_set)
-        section_encoder = tfds.features.text.TokenTextEncoder(self.section_set)
+
+        label_encoder = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
+        worthiness_encoder = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
+        section_encoder = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
 
         for sample in data:
+            # if "text" in sample.keys():
+            #     text_encoder.fit_on_texts(sample["text"])
+            #     encoded_text.append(text_encoder.texts_to_sequences(sample["text"]))
+            # elif "string" in sample.keys():
+            #     text_encoder.fit_on_texts(sample["string"])
+            #     encoded_text.append(text_encoder.texts_to_sequences(sample["string"]))
+            #not_encoded_tokens.append(sample["tokens"])
             if "text" in sample.keys():
                 encoded_text.append(text_encoder.encode(sample["text"]))
             elif "string" in sample.keys():
@@ -134,22 +145,30 @@ class SciciteReader:
             relevant_key = sample["relevant_key"]
 
             if relevant_key == "label":
-                encoded_labels.append(label_encoder.encode(sample["label"]))
+                label_encoder.fit_on_texts([sample["label"]])
+                encoded_labels.append(label_encoder.texts_to_sequences([sample["label"]]))
             else:
-                encoded_labels.append([-1])
+                encoded_labels.append(
+                    worthiness_encoder.texts_to_sequences(['__unknown__'])
+                )
 
             if relevant_key == "section_title":
-                encoded_sections.append(section_encoder.encode(sample["section_title"]))
+                section_encoder.fit_on_texts([sample["section_title"]])
+                encoded_sections.append(section_encoder.texts_to_sequences([sample["section_title"]]))
             else:
-                encoded_sections.append([-1])
+                encoded_sections.append(
+                    worthiness_encoder.texts_to_sequences(['__unknown__'])
+                )
 
             if relevant_key == "is_citation":
+                worthiness_encoder.fit_on_texts([sample["is_citation"]])
                 encoded_worthiness.append(
-                    worthiness_encoder.encode(str(sample["is_citation"]))
+                    worthiness_encoder.texts_to_sequences([sample["is_citation"]])
                 )
             else:
-                encoded_worthiness.append([-1])
-
+                encoded_worthiness.append(
+                    worthiness_encoder.texts_to_sequences(['__unknown__'])
+                )
         def gen_train_series():
             for t, tl, ts, tw in zip(
                     encoded_text,

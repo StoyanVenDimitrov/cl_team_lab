@@ -26,10 +26,10 @@ class MultitaskLearner(Model):
             section_size,
             worthiness_size
         )
-        self.mask_value = -1  # for masking missing label
+        self.mask_value = 1  # for masking missing label
 
     def create_model(
-        self, embedding_dim, rnn_units, vocab_size, labels_size, section_size, worthiness_size, dataset=None
+        self, embedding_dim, rnn_units, vocab_size, labels_size, section_size, worthiness_size
     ):
         text_input_layer = tf.keras.Input(
             shape=(None,), dtype=tf.int32, name="Input_1"
@@ -71,15 +71,26 @@ class MultitaskLearner(Model):
             self.model, to_file="multi_input_and_output_model.png", show_shapes=True
         )
         # for the loss object: https://www.dlology.com/blog/how-to-multi-task-learning-with-missing-labels-in-keras/
-        loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
-        self.model.compile(optimizer='adam', loss=loss_object, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
+        # def masked_loss_function(y_true, y_pred):
+        #     mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
+        #     return K.binary_crossentropy(y_true * mask, y_pred * mask)
 
-        # ds_series_batch = dataset.shuffle(
-        #     BUFFER_SIZE,
-        #     reshuffle_each_iteration=True).padded_batch(BATCH_SIZE,
-        #                                                 padded_shapes=(
-        #                                                     [None], {'dense': [None], 'dense_1': [None]}
-        #                                                 ),
-        #                                                 drop_remainder=True)
-        # self.model.fit(ds_series_batch, epochs=EPOCHS)
+        masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+
+        self.model.compile(optimizer='adam', loss=masked_loss_function, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
+
+    def fit_model(self, dataset):
+        ds_series_batch = dataset.shuffle(
+            BUFFER_SIZE,
+            reshuffle_each_iteration=True).padded_batch(BATCH_SIZE,
+                                                        padded_shapes=(
+                                                            [None],
+                                                            {
+                                                                'dense': [None],
+                                                                'dense_1': [None],
+                                                                'dense_2': [None]
+                                                            }
+                                                        ),
+                                                        drop_remainder=True)
+        self.model.fit(ds_series_batch, epochs=EPOCHS)
