@@ -8,28 +8,31 @@ from src import evaluation
 
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
+BUFFER_SIZE = 11000
+BATCH_SIZE = 2
+EPOCHS = 1
+
 
 class MultitaskLearner(Model):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
     def __init__(self, config, vocab_size, labels_size, section_size, worthiness_size):
         super().__init__(config)
-        self.worthiness_encoder = tfds.features.text.TokenTextEncoder(2)
         self.create_model(
-            config["embedding_dim"],
-            config["rnn_units"],
+            int(config["embedding_dim"]),
+            int(config["rnn_units"]),
             vocab_size,
             labels_size,
             section_size,
             worthiness_size
         )
-        self.mask_value = -1  # for masking missing labels
+        self.mask_value = -1  # for masking missing label
 
     def create_model(
-        self, embedding_dim, rnn_units, vocab_size, labels_size, section_size, worthiness_size
+        self, embedding_dim, rnn_units, vocab_size, labels_size, section_size, worthiness_size, dataset=None
     ):
         text_input_layer = tf.keras.Input(
-            shape=(None,), dtype=tf.string, name="Input_1"
+            shape=(None,), dtype=tf.int32, name="Input_1"
         )
         embeddings_layer = tf.keras.layers.Embedding(
             vocab_size + 1, embedding_dim, mask_zero=True
@@ -67,4 +70,16 @@ class MultitaskLearner(Model):
         tf.keras.utils.plot_model(
             self.model, to_file="multi_input_and_output_model.png", show_shapes=True
         )
-    # https://www.dlology.com/blog/how-to-multi-task-learning-with-missing-labels-in-keras/
+        # for the loss object: https://www.dlology.com/blog/how-to-multi-task-learning-with-missing-labels-in-keras/
+        loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+
+        self.model.compile(optimizer='adam', loss=loss_object, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
+
+        # ds_series_batch = dataset.shuffle(
+        #     BUFFER_SIZE,
+        #     reshuffle_each_iteration=True).padded_batch(BATCH_SIZE,
+        #                                                 padded_shapes=(
+        #                                                     [None], {'dense': [None], 'dense_1': [None]}
+        #                                                 ),
+        #                                                 drop_remainder=True)
+        # self.model.fit(ds_series_batch, epochs=EPOCHS)
