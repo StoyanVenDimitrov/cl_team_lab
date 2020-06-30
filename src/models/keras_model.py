@@ -9,39 +9,34 @@ from src import evaluation
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
 BUFFER_SIZE = 11000
-BATCH_SIZE = 2
+BATCH_SIZE = 24
 EPOCHS = 1
 
 
 class MultitaskLearner(Model):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
-    def __init__(self, config, vocab_size, labels_size, section_size, worthiness_size):
+    def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
         super().__init__(config)
-        self.create_model(
-            int(config["embedding_dim"]),
-            int(config["rnn_units"]),
-            vocab_size,
-            labels_size,
-            section_size,
-            worthiness_size
-        )
+        # self.create_model(
+        self.embedding_dim = int(config["embedding_dim"])
+        self.rnn_units = int(config["rnn_units"])
         self.mask_value = 1  # for masking missing label
 
     def create_model(
-        self, embedding_dim, rnn_units, vocab_size, labels_size, section_size, worthiness_size
+        self, vocab_size, labels_size, section_size, worthiness_size
     ):
         text_input_layer = tf.keras.Input(
             shape=(None,), dtype=tf.int32, name="Input_1"
         )
         embeddings_layer = tf.keras.layers.Embedding(
-            vocab_size + 1, embedding_dim, mask_zero=True
+            vocab_size, self.embedding_dim, mask_zero=True
         )
 
         input_embedding = embeddings_layer(text_input_layer)
         output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
             tf.keras.layers.LSTM(
-                rnn_units,
+                self.rnn_units,
                 stateful=False,
                 return_sequences=True,
                 return_state=True,
@@ -51,13 +46,13 @@ class MultitaskLearner(Model):
             input_embedding
         )
         state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-        label_output = tf.keras.layers.Dense(labels_size + 1, activation="softmax")(
+        label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
             state_h
         )
-        section_output = tf.keras.layers.Dense(section_size + 1, activation="softmax")(
+        section_output = tf.keras.layers.Dense(section_size+1, activation="softmax")(
             state_h
         )
-        worthiness_output = tf.keras.layers.Dense(worthiness_size + 1, activation="softmax")(
+        worthiness_output = tf.keras.layers.Dense(worthiness_size+1, activation="softmax")(
             state_h
         )
 
@@ -81,16 +76,49 @@ class MultitaskLearner(Model):
         self.model.compile(optimizer='adam', loss=masked_loss_function, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
 
     def fit_model(self, dataset):
-        ds_series_batch = dataset.shuffle(
-            BUFFER_SIZE,
-            reshuffle_each_iteration=True).padded_batch(BATCH_SIZE,
-                                                        padded_shapes=(
-                                                            [None],
-                                                            {
-                                                                'dense': [None],
-                                                                'dense_1': [None],
-                                                                'dense_2': [None]
-                                                            }
-                                                        ),
-                                                        drop_remainder=True)
-        self.model.fit(ds_series_batch, epochs=EPOCHS)
+        # ds_series_batch = dataset.shuffle(
+        #     BUFFER_SIZE,
+        #     reshuffle_each_iteration=True).padded_batch(BATCH_SIZE,
+        #                                                 padded_shapes=(
+        #                                                     [None],
+        #                                                     {
+        #                                                         'dense': [None],
+        #                                                         'dense_1': [None],
+        #                                                         'dense_2': [None]
+        #                                                     }
+        #                                                 ),
+        #                                                 drop_remainder=True)
+        # self.model.fit(ds_series_batch, epochs=EPOCHS)
+        dataset = dataset.shuffle(BUFFER_SIZE)
+        dataset = dataset.padded_batch(BATCH_SIZE, drop_remainder=True)
+
+        self.model.fit(dataset, epochs=EPOCHS)
+
+
+    def prepare_data(self, data):
+        """tokenize and encode for text, label, section... """
+        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
+
+        filtered_data = list(filter('__unknown__'.__ne__, data))
+        component_tokenizer.fit_on_texts(filtered_data)
+
+        tensor = component_tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                               padding='post')
+        # TODO: pad batches, not the whole set
+        return tensor, component_tokenizer
+
+    def create_dataset(self, text, labels, sections, worthiness):
+        dataset = tf.data.Dataset.from_tensor_slices(
+            (
+                text,
+                {
+                    'dense': labels,
+                    'dense_1': sections,
+                    'dense_2': worthiness
+                }
+            )
+        )
+        #dataset = dataset.batch(BATCH_SIZE, drop_remainder=True)
+        return dataset

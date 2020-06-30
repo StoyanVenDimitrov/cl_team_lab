@@ -107,10 +107,10 @@ class SciciteReader:
         data = []
 
         not_encoded_tokens = []
-        encoded_text = []
-        encoded_labels = []
-        encoded_sections = []
-        encoded_worthiness = []
+        text = []
+        labels = []
+        sections = []
+        worthiness = []
 
         for i, j, k in zip(
             self.load_main_task_data(),
@@ -121,74 +121,33 @@ class SciciteReader:
             data.append(j)
             data.append(k)
 
-        # text_encoder = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
-        text_encoder = tfds.features.text.TokenTextEncoder(self.vocab_set)
-
-        label_encoder = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
-        worthiness_encoder = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
-        section_encoder = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
 
         for sample in data:
-            # if "text" in sample.keys():
-            #     text_encoder.fit_on_texts(sample["text"])
-            #     encoded_text.append(text_encoder.texts_to_sequences(sample["text"]))
-            # elif "string" in sample.keys():
-            #     text_encoder.fit_on_texts(sample["string"])
-            #     encoded_text.append(text_encoder.texts_to_sequences(sample["string"]))
-            #not_encoded_tokens.append(sample["tokens"])
             if "text" in sample.keys():
-                encoded_text.append(text_encoder.encode(sample["text"]))
+                text.append(sample['text'])
             elif "string" in sample.keys():
-                encoded_text.append(text_encoder.encode(sample["string"]))
+                text.append(sample['string'])
             not_encoded_tokens.append(sample["tokens"])
 
             relevant_key = sample["relevant_key"]
 
             if relevant_key == "label":
-                label_encoder.fit_on_texts([sample["label"]])
-                encoded_labels.append(label_encoder.texts_to_sequences([sample["label"]]))
+                labels.append(sample["label"])
             else:
-                encoded_labels.append(
-                    worthiness_encoder.texts_to_sequences(['__unknown__'])
-                )
+                labels.append("__unknown__")
 
             if relevant_key == "section_title":
-                section_encoder.fit_on_texts([sample["section_title"]])
-                encoded_sections.append(section_encoder.texts_to_sequences([sample["section_title"]]))
+                # avoid 'related work' to be tokenized with two labels
+                sections.append(sample["section_title"].split(' ')[0])
             else:
-                encoded_sections.append(
-                    worthiness_encoder.texts_to_sequences(['__unknown__'])
-                )
+                sections.append("__unknown__")
 
             if relevant_key == "is_citation":
-                worthiness_encoder.fit_on_texts([sample["is_citation"]])
-                encoded_worthiness.append(
-                    worthiness_encoder.texts_to_sequences([sample["is_citation"]])
-                )
+                worthiness.append(sample["is_citation"])
             else:
-                encoded_worthiness.append(
-                    worthiness_encoder.texts_to_sequences(['__unknown__'])
-                )
-        def gen_train_series():
-            for t, tl, ts, tw in zip(
-                    encoded_text,
-                    encoded_labels,
-                    encoded_sections,
-                    encoded_worthiness
-            ):
-                yield t, {'dense': tl, 'dense_1': ts, 'dense_2': tw}
+                worthiness.append("__unknown__")
 
-        series = tf.data.Dataset.from_generator(gen_train_series,
-                                                output_types=(
-                                                    tf.int32,
-                                                    {
-                                                        'dense': tf.int32,
-                                                        'dense_1': tf.int32,
-                                                        'dense_2': tf.int32
-                                                    }
-                                                    ),
-                                                )
-        return series, text_encoder, label_encoder, section_encoder, worthiness_encoder
+        return text, labels, sections, worthiness
 
     @staticmethod
     def read_sentences(data):

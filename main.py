@@ -1,6 +1,7 @@
 from src.utils import utils
 from src.evaluation import custom_macro_f1_score, custom_micro_f1_score
 from src.utils.reader import SciciteReader
+from src.models.keras_model import MultitaskLearner
 import configparser
 import argparse
 import mlflow
@@ -98,50 +99,81 @@ class Predictor:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    reader = SciciteReader(config["trainer"]["dataset"])
+    text, labels, sections, worthiness = reader.load_multitask_data()
+    # print(label_encoder.texts_to_sequences(['background True is background background false sometimes']))
+    keras_model = MultitaskLearner(
+        config["multitask_trainer"]
+    )
+    text_tensor, text_tokenizer = keras_model.prepare_data(text)
+    labels_tensor, labels_tokenizer = keras_model.prepare_data(labels)
+    sections_tensor, sections_tokenizer = keras_model.prepare_data(sections)
+    worthiness_tensor, worthiness_tokenizer = keras_model.prepare_data(worthiness)
 
-    parser.add_argument(
-        "--train",
-        required=True,
-        default=False,
-        help="Set to True if training, else set to False.",
-    )
-    parser.add_argument(
-        "--test",
-        required=False,
-        default=False,
-        help="Set to True if testing, else set to False.",
-    )
-    parser.add_argument(
-        "--log_metrics",
-        required=False,
-        default=False,
-        help="Set to True if metrics should me logged with mlflow, else set to False.",
-    )
-    parser.add_argument(
-        "--train_features",
-        required=False,
-        default=True,
-        help="Set to True if training features, else set to False.",
+    dataset = keras_model.create_dataset(
+        text_tensor,
+        labels_tensor,
+        sections_tensor,
+        worthiness_tensor
     )
 
-    args = parser.parse_args()
+    # example_input_batch, example_labes, _, _ = next(iter(dataset))
+    # for element in dataset.as_numpy_iterator():
+    #     print(element)
+    #     print('########')
+    vocab_size = len(text_tokenizer.word_index.keys())
+    labels_size = len(labels_tokenizer.word_index.keys())
+    section_size = len(sections_tokenizer.word_index.keys())
+    worthiness_size = len(worthiness_tokenizer.word_index.keys())
 
-    if args.log_metrics:
-        mlflow.start_run()
-        mlflow.log_params(utils.get_log_params(config))
-
-    trainer = Trainer(args)
-    if args.train_features:
-        trainer.train_feature_extractor()
-    if args.train:
-        trainer.train_classifier()
-    macro_f1, micro_f1 = trainer.evaluate()
-    print(f"Macro F1: {macro_f1}\nMicro F1: {micro_f1}")
-
-    # if args.test:
-    # predictor = Predictor()
-    # print(predictor.predict("Set to True if testing, else set to False."))
-
-    if args.log_metrics:
-        mlflow.end_run()
+    keras_model.create_model(
+        vocab_size, labels_size, section_size, worthiness_size
+    )
+    keras_model.fit_model(dataset)
+    # parser = argparse.ArgumentParser()
+    #
+    # parser.add_argument(
+    #     "--train",
+    #     required=True,
+    #     default=False,
+    #     help="Set to True if training, else set to False.",
+    # )
+    # parser.add_argument(
+    #     "--test",
+    #     required=False,
+    #     default=False,
+    #     help="Set to True if testing, else set to False.",
+    # )
+    # parser.add_argument(
+    #     "--log_metrics",
+    #     required=False,
+    #     default=False,
+    #     help="Set to True if metrics should me logged with mlflow, else set to False.",
+    # )
+    # parser.add_argument(
+    #     "--train_features",
+    #     required=False,
+    #     default=True,
+    #     help="Set to True if training features, else set to False.",
+    # )
+    #
+    # args = parser.parse_args()
+    #
+    # if args.log_metrics:
+    #     mlflow.start_run()
+    #     mlflow.log_params(utils.get_log_params(config))
+    #
+    # trainer = Trainer(args)
+    # if args.train_features:
+    #     trainer.train_feature_extractor()
+    # if args.train:
+    #     trainer.train_classifier()
+    # macro_f1, micro_f1 = trainer.evaluate()
+    # print(f"Macro F1: {macro_f1}\nMicro F1: {micro_f1}")
+    #
+    # # if args.test:
+    # # predictor = Predictor()
+    # # print(predictor.predict("Set to True if testing, else set to False."))
+    #
+    # if args.log_metrics:
+    #     mlflow.end_run()
