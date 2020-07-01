@@ -67,11 +67,12 @@ class MultitaskLearner(Model):
         )
         # for the loss object: https://www.dlology.com/blog/how-to-multi-task-learning-with-missing-labels-in-keras/
 
-        # def masked_loss_function(y_true, y_pred):
-        #     mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
-        #     return K.binary_crossentropy(y_true * mask, y_pred * mask)
+        def masked_loss_function(y_true, y_pred):
+            print(y_true)
+            mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
+            return K.binary_crossentropy(y_true * mask, y_pred * mask)
 
-        masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
         self.model.compile(optimizer='adam', loss=masked_loss_function, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
 
@@ -89,8 +90,8 @@ class MultitaskLearner(Model):
         #                                                 ),
         #                                                 drop_remainder=True)
         # self.model.fit(ds_series_batch, epochs=EPOCHS)
-        dataset = dataset.shuffle(BUFFER_SIZE)
         dataset = dataset.padded_batch(BATCH_SIZE, drop_remainder=True)
+        dataset = dataset.shuffle(BUFFER_SIZE)
 
         self.model.fit(dataset, epochs=EPOCHS)
 
