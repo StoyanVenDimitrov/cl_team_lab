@@ -1,6 +1,5 @@
 """NN model implementation with keras"""
 import tensorflow as tf
-import tensorflow_datasets as tfds
 from src.models.model import Model
 from tensorflow.keras import backend as K
 
@@ -9,8 +8,6 @@ from src import evaluation
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
 BUFFER_SIZE = 11000
-BATCH_SIZE = 24
-EPOCHS = 1
 
 
 class MultitaskLearner(Model):
@@ -21,6 +18,8 @@ class MultitaskLearner(Model):
         # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
         self.rnn_units = int(config["rnn_units"])
+        self.batch_size = int(config['batch_size'])
+        self.number_of_epochs = int(config['number_of_epochs'])
         self.mask_value = 1  # for masking missing label
 
     def create_model(
@@ -68,32 +67,20 @@ class MultitaskLearner(Model):
         # for the loss object: https://www.dlology.com/blog/how-to-multi-task-learning-with-missing-labels-in-keras/
 
         def masked_loss_function(y_true, y_pred):
-            print(y_true)
+            # target: A tensor with the same shape as output.
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
-            return K.binary_crossentropy(y_true * mask, y_pred * mask)
+            y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
+            return K.binary_crossentropy(y_v * mask, y_pred * mask)
 
         # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
         self.model.compile(optimizer='adam', loss=masked_loss_function, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
 
     def fit_model(self, dataset):
-        # ds_series_batch = dataset.shuffle(
-        #     BUFFER_SIZE,
-        #     reshuffle_each_iteration=True).padded_batch(BATCH_SIZE,
-        #                                                 padded_shapes=(
-        #                                                     [None],
-        #                                                     {
-        #                                                         'dense': [None],
-        #                                                         'dense_1': [None],
-        #                                                         'dense_2': [None]
-        #                                                     }
-        #                                                 ),
-        #                                                 drop_remainder=True)
-        # self.model.fit(ds_series_batch, epochs=EPOCHS)
-        dataset = dataset.padded_batch(BATCH_SIZE, drop_remainder=True)
+        dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
 
-        self.model.fit(dataset, epochs=EPOCHS)
+        self.model.fit(dataset, epochs=self.number_of_epochs)
 
 
     def prepare_data(self, data):
@@ -121,5 +108,4 @@ class MultitaskLearner(Model):
                 }
             )
         )
-        #dataset = dataset.batch(BATCH_SIZE, drop_remainder=True)
         return dataset
