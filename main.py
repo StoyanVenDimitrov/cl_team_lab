@@ -6,6 +6,9 @@ import configparser
 import argparse
 import mlflow
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 # pylint:skip-file
 
 config = configparser.ConfigParser()
@@ -105,7 +108,7 @@ if __name__ == "__main__":
     keras_model = MultitaskLearner(
         config["multitask_trainer"]
     )
-    text_tensor, text_tokenizer = keras_model.prepare_data(text)
+    text_tensor, vocab = keras_model.prepare_data(text, typ="text", pad_token="<PAD>")  # <PAD> specific for elmo
     labels_tensor, labels_tokenizer = keras_model.prepare_data(labels)
     sections_tensor, sections_tokenizer = keras_model.prepare_data(sections)
     worthiness_tensor, worthiness_tokenizer = keras_model.prepare_data(worthiness)
@@ -121,7 +124,7 @@ if __name__ == "__main__":
     # for element in dataset.as_numpy_iterator():
     #     print(element)
     #     print('########')
-    vocab_size = len(text_tokenizer.word_index.keys())
+    vocab_size = len(vocab)
     labels_size = len(labels_tokenizer.word_index.keys())
     section_size = len(sections_tokenizer.word_index.keys())
     worthiness_size = len(worthiness_tokenizer.word_index.keys())
