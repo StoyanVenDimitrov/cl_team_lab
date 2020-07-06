@@ -107,7 +107,7 @@ class MultitaskLearner(Model):
             tokens = [[str(t) for t in tokenizer.tokenize(sent)] for sent in data]
             tensor = keras.preprocessing.sequence.pad_sequences(tokens, padding="post",
                                                                    dtype=object,
-                                                                   maxlen=100,
+                                                                   maxlen=self.max_len,
                                                                    value=pad_token)
             # TODO: pad batches, not the whole set
             return tensor, list(set([t for s in tokens for t in s]))
