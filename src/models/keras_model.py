@@ -25,14 +25,13 @@ class MultitaskLearner(Model):
     def create_model(
         self, vocab_size, labels_size, section_size, worthiness_size
     ):
-        text_input_layer = tf.keras.Input(
-            shape=(None,), dtype=tf.int32, name="Input_1"
-        )
-        embeddings_layer = tf.keras.layers.Embedding(
-            vocab_size, self.embedding_dim, mask_zero=True
-        )
-
-        input_embedding = embeddings_layer(text_input_layer)
+        text_input_layer = tf.keras.Input(shape=(None,), dtype=tf.string, name='Input_1')
+        hub_layer = hub.KerasLayer("https://tfhub.dev/google/tf2-preview/nnlm-en-dim50-with-normalization/1",
+                                   input_shape=[],
+                                   output_shape=[50],
+                                   dtype=tf.string,
+                                   name='hub_keras')
+        input_embedding = hub_layer(text_input_layer)
         output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
             tf.keras.layers.LSTM(
                 self.rnn_units,
