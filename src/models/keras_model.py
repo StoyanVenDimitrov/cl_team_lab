@@ -2,12 +2,19 @@
 import tensorflow as tf
 from src.models.model import Model
 from tensorflow.keras import backend as K
+import tensorflow_hub as hub
+import bert
+
 
 from src import evaluation
 
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
 BUFFER_SIZE = 11000
+bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
+                            trainable=True)
+FullTokenizer = bert.bert_tokenization.FullTokenizer
+max_seq_length = 511  # Your choice here.
 
 
 class MultitaskLearner(Model):
@@ -23,15 +30,17 @@ class MultitaskLearner(Model):
         self.mask_value = 1  # for masking missing label
 
     def create_model(
-        self, vocab_size, labels_size, section_size, worthiness_size
+        self, labels_size, section_size, worthiness_size
     ):
-        text_input_layer = tf.keras.Input(shape=(None,), dtype=tf.string, name='Input_1')
-        hub_layer = hub.KerasLayer("https://tfhub.dev/google/tf2-preview/nnlm-en-dim50-with-normalization/1",
-                                   input_shape=[],
-                                   output_shape=[50],
-                                   dtype=tf.string,
-                                   name='hub_keras')
-        input_embedding = hub_layer(text_input_layer)
+        input_word_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+                                               name="input_word_ids")
+        input_mask = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+                                           name="input_mask")
+        segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+                                            name="segment_ids")
+        # bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/2",
+        #                             trainable=True)
+        pooled_output, sequence_output = bert_layer([input_word_ids, input_mask, segment_ids])
         output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
             tf.keras.layers.LSTM(
                 self.rnn_units,
@@ -41,7 +50,7 @@ class MultitaskLearner(Model):
                 recurrent_initializer="glorot_uniform",
             )
         )(
-            input_embedding
+            sequence_output
         )
         state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
@@ -54,9 +63,9 @@ class MultitaskLearner(Model):
             state_h
         )
 
-
         self.model = tf.keras.Model(
-            inputs=text_input_layer, outputs=[label_output, section_output, worthiness_output]
+            inputs=[input_word_ids, input_mask, segment_ids],
+            outputs=[label_output, section_output, worthiness_output]
         )
 
         self.model.summary()
@@ -81,9 +90,8 @@ class MultitaskLearner(Model):
 
         self.model.fit(dataset, epochs=self.number_of_epochs)
 
-
-    def prepare_data(self, data):
-        """tokenize and encode for text, label, section... """
+    def prepare_output_data(self, data):
+        """tokenize and encode for label, section... """
         component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
 
         filtered_data = list(filter('__unknown__'.__ne__, data))
@@ -96,10 +104,29 @@ class MultitaskLearner(Model):
         # TODO: pad batches, not the whole set
         return tensor, component_tokenizer
 
-    def create_dataset(self, text, labels, sections, worthiness):
+    def prepare_input_data(self, data):
+        """prepare text input for BERT"""
+        vocab_file = bert_layer.resolved_object.vocab_file.asset_path.numpy()
+        do_lower_case = bert_layer.resolved_object.do_lower_case.numpy()
+        tokenizer = FullTokenizer(vocab_file, do_lower_case)
+        input_ids, input_masks, input_segments = [], [], []
+
+        for s in data:
+            stokens = tokenizer.tokenize(s)
+            stokens = ["[CLS]"] + stokens + ["[SEP]"]
+            input_ids.append(get_ids(stokens, tokenizer, max_seq_length))
+            input_masks.append(get_masks(stokens, max_seq_length))
+            input_segments.append(get_segments(stokens, max_seq_length))
+        return input_ids, input_masks, input_segments
+
+    def create_dataset(self, ids, mask, segments, labels, sections, worthiness):
         dataset = tf.data.Dataset.from_tensor_slices(
             (
-                text,
+                {
+                    'input_word_ids': ids,
+                    'input_mask': mask,
+                    'segment_ids': segments
+                },
                 {
                     'dense': labels,
                     'dense_1': sections,
@@ -108,3 +135,31 @@ class MultitaskLearner(Model):
             )
         )
         return dataset
+
+def get_masks(tokens, max_seq_length):
+    """Mask for padding"""
+    if len(tokens)>max_seq_length:
+        return [1] * max_seq_length
+    return [1]*len(tokens) + [0] * (max_seq_length - len(tokens))
+
+
+def get_segments(tokens, max_seq_length):
+    """Segments: 0 for the first sequence, 1 for the second"""
+    segments = []
+    current_segment_id = 0
+    if len(tokens) > max_seq_length:
+        return [0]*max_seq_length
+    for token in tokens:
+        segments.append(current_segment_id)
+        if token == "[SEP]":
+            current_segment_id = 1
+    return segments + [0] * (max_seq_length - len(tokens))
+
+
+def get_ids(tokens, tokenizer, max_seq_length):
+    """Token ids from Tokenizer vocab"""
+    token_ids = tokenizer.convert_tokens_to_ids(tokens)
+    if len(tokens) > max_seq_length:
+        return token_ids[:max_seq_length]
+    input_ids = token_ids + [0] * (max_seq_length-len(token_ids))
+    return input_ids

@@ -11,7 +11,6 @@ import mlflow
 config = configparser.ConfigParser()
 config.read("configs/default.conf")
 
-
 class Trainer:
     def __init__(self, params):
         self.params = params
@@ -105,13 +104,15 @@ if __name__ == "__main__":
     keras_model = MultitaskLearner(
         config["multitask_trainer"]
     )
-    text_tensor, text_tokenizer = keras_model.prepare_data(text)
-    labels_tensor, labels_tokenizer = keras_model.prepare_data(labels)
-    sections_tensor, sections_tokenizer = keras_model.prepare_data(sections)
-    worthiness_tensor, worthiness_tokenizer = keras_model.prepare_data(worthiness)
+    input_ids, input_masks, input_segments = keras_model.prepare_input_data(text)
+    labels_tensor, labels_tokenizer = keras_model.prepare_output_data(labels)
+    sections_tensor, sections_tokenizer = keras_model.prepare_output_data(sections)
+    worthiness_tensor, worthiness_tokenizer = keras_model.prepare_output_data(worthiness)
 
     dataset = keras_model.create_dataset(
-        text_tensor,
+        input_ids,
+        input_masks,
+        input_segments,
         labels_tensor,
         sections_tensor,
         worthiness_tensor
@@ -121,13 +122,13 @@ if __name__ == "__main__":
     # for element in dataset.as_numpy_iterator():
     #     print(element)
     #     print('########')
-    vocab_size = len(text_tokenizer.word_index.keys())
+    #vocab_size = len(text_tokenizer.word_index.keys())
     labels_size = len(labels_tokenizer.word_index.keys())
     section_size = len(sections_tokenizer.word_index.keys())
     worthiness_size = len(worthiness_tokenizer.word_index.keys())
 
     keras_model.create_model(
-        vocab_size, labels_size, section_size, worthiness_size
+        labels_size, section_size, worthiness_size
     )
     keras_model.fit_model(dataset)
     # parser = argparse.ArgumentParser()

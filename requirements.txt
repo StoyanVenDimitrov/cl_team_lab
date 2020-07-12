@@ -5,3 +5,7 @@ pandas-compat==0.1.1
 xai==0.0.5
 jsonlines==1.2.0
 tqdm==4.46.0
+bert-for-tf2
+tensorflow-hub==0.8.0
+tensorflow==2.2.0
+tensorboard==2.2.2
