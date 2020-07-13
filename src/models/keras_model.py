@@ -78,18 +78,19 @@ class MultitaskLearner(Model):
             # target: A tensor with the same shape as output.
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
             y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
-            # TODO: lambdas for each task
-            return K.categorical_crossentropy(y_v * mask, y_pred * mask)
+            return K.binary_crossentropy(y_v * mask, y_pred * mask)
 
         # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
         self.model.compile(optimizer='adam', loss=masked_loss_function, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
 
-    def fit_model(self, dataset):
+    def fit_model(self, dataset, val_dataset):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
+        val_dataset = val_dataset.padded_batch(self.batch_size, drop_remainder=True)
+
         dataset = dataset.shuffle(BUFFER_SIZE)
 
-        self.model.fit(dataset, epochs=self.number_of_epochs)
+        self.model.fit(dataset, epochs=self.number_of_epochs, validation_data = val_dataset)
 
     def prepare_output_data(self, data):
         """tokenize and encode for label, section... """
@@ -102,8 +103,14 @@ class MultitaskLearner(Model):
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
                                                                padding='post')
-        # TODO: pad batches, not the whole set
         return tensor, component_tokenizer
+    
+    def prepare_dev_output_data(self, data, tokenizer):
+        tensor = tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                               padding='post')
+        return tensor
 
     def prepare_input_data(self, data):
         """prepare text input for BERT"""
@@ -136,6 +143,21 @@ class MultitaskLearner(Model):
             )
         )
         return dataset
+
+    def create_dev_dataset(self, ids, mask, segments, labels):
+            dataset = tf.data.Dataset.from_tensor_slices(
+                (
+                    {
+                        'input_word_ids': ids,
+                        'input_mask': mask,
+                        'segment_ids': segments
+                    },
+                    {
+                        'dense': labels
+                    }
+                )
+            )
+            return dataset
 
 def get_masks(tokens, max_seq_length):
     """Mask for padding"""

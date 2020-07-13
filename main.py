@@ -99,7 +99,8 @@ class Predictor:
 
 if __name__ == "__main__":
     reader = SciciteReader(config["trainer"]["dataset"])
-    text, labels, sections, worthiness = reader.load_multitask_data()
+    text, labels, sections, worthiness = reader.load_multitask_data(multitask=True)
+    text_dev, labels_dev, _, _ = reader.load_multitask_data(for_validation=True)
     # print(label_encoder.texts_to_sequences(['background True is background background false sometimes']))
     keras_model = MultitaskLearner(
         config["multitask_trainer"]
@@ -109,6 +110,9 @@ if __name__ == "__main__":
     sections_tensor, sections_tokenizer = keras_model.prepare_output_data(sections)
     worthiness_tensor, worthiness_tokenizer = keras_model.prepare_output_data(worthiness)
 
+    dev_input_ids, dev_input_masks, dev_input_segments = keras_model.prepare_input_data(text_dev)
+    dev_label_tensor = keras_model.prepare_dev_output_data(labels_dev, labels_tokenizer)
+
     dataset = keras_model.create_dataset(
         input_ids,
         input_masks,
@@ -116,6 +120,12 @@ if __name__ == "__main__":
         labels_tensor,
         sections_tensor,
         worthiness_tensor
+    )
+    dev_dataset = keras_model.create_dev_dataset(
+        dev_input_ids, 
+        dev_input_masks, 
+        dev_input_segments,
+        dev_label_tensor
     )
 
     # example_input_batch, example_labes, _, _ = next(iter(dataset))
@@ -130,7 +140,7 @@ if __name__ == "__main__":
     keras_model.create_model(
         labels_size, section_size, worthiness_size
     )
-    keras_model.fit_model(dataset)
+    keras_model.fit_model(dataset, dev_dataset)
     # parser = argparse.ArgumentParser()
     #
     # parser.add_argument(
