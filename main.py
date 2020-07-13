@@ -100,7 +100,8 @@ class Predictor:
 
 if __name__ == "__main__":
     reader = SciciteReader(config["trainer"]["dataset"])
-    text, labels, sections, worthiness = reader.load_multitask_data()
+    text, labels, sections, worthiness = reader.load_multitask_data(multitask=True)
+    text_dev, labels_dev, _, _ = reader.load_multitask_data(for_validation=True)
     # print(label_encoder.texts_to_sequences(['background True is background background false sometimes']))
     keras_model = MultitaskLearner(
         config["multitask_trainer"]
@@ -110,11 +111,20 @@ if __name__ == "__main__":
     sections_tensor, sections_tokenizer = keras_model.prepare_data(sections)
     worthiness_tensor, worthiness_tokenizer = keras_model.prepare_data(worthiness)
 
+    text_tensor_dev = keras_model.prepare_dev_data(text_dev, text_tokenizer)
+    labels_tensor_dev = keras_model.prepare_dev_data(labels_dev, labels_tokenizer)
+
     dataset = keras_model.create_dataset(
         text_tensor,
         labels_tensor,
         sections_tensor,
         worthiness_tensor
+    )
+    dev_dataset = keras_model.create_dataset(
+        text_tensor_dev,
+        labels_tensor_dev,
+        [],
+        []
     )
 
     # example_input_batch, example_labes, _, _ = next(iter(dataset))
@@ -129,7 +139,7 @@ if __name__ == "__main__":
     keras_model.create_model(
         vocab_size, labels_size, section_size, worthiness_size
     )
-    keras_model.fit_model(dataset)
+    keras_model.fit_model(dataset, dev_dataset)
     # parser = argparse.ArgumentParser()
     #
     # parser.add_argument(

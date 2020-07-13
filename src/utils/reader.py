@@ -56,11 +56,14 @@ class SciciteReader:
                 tdt.append(data)
         return tdt
 
-    def load_main_task_data(self):
+    def load_main_task_data(self, dev=False):
         """Loads train data for main task"""
-        train_file = os.path.join(self.data_dir, "train.jsonl")
+        if dev:
+            file = os.path.join(self.data_dir, "dev.jsonl")
+        else:
+            file = os.path.join(self.data_dir, "train.jsonl")
 
-        with open(train_file, "r") as data_file:
+        with open(file, "r") as data_file:
             data = [json.loads(x) for x in list(data_file)]
         for sample in data:
             tokens = self.tokenizer.tokenize(sample["string"])
@@ -102,7 +105,7 @@ class SciciteReader:
             sample["tokens"] = tokens
         return data
 
-    def load_multitask_data(self):
+    def load_multitask_data(self, for_validation=False, multitask=False):
 
         data = []
 
@@ -112,14 +115,18 @@ class SciciteReader:
         sections = []
         worthiness = []
 
-        for i, j, k in zip(
-            self.load_main_task_data(),
-            self.load_scaffold("cite"),
-            self.load_scaffold("title"),
-        ):
-            data.append(i)
-            data.append(j)
-            data.append(k)
+        if multitask:
+            for i, j, k in zip(
+                self.load_main_task_data(),
+                self.load_scaffold("cite"),
+                self.load_scaffold("title"),
+            ):
+                data.append(i)
+                data.append(j)
+                data.append(k)
+        else:
+            for i in self.load_main_task_data(dev=for_validation):
+                data.append(i)
 
 
         for sample in data:
@@ -131,21 +138,22 @@ class SciciteReader:
 
             relevant_key = sample["relevant_key"]
 
-            if relevant_key == "label":
-                labels.append(sample["label"])
-            else:
-                labels.append("__unknown__")
+            if multitask:
+                if relevant_key == "label":
+                    labels.append(sample["label"])
+                else:
+                    labels.append("__unknown__")
 
-            if relevant_key == "section_title":
-                # avoid 'related work' to be tokenized with two labels
-                sections.append(sample["section_title"].split(' ')[0])
-            else:
-                sections.append("__unknown__")
+                if relevant_key == "section_title":
+                    # avoid 'related work' to be tokenized with two labels
+                    sections.append(sample["section_title"].split(' ')[0])
+                else:
+                    sections.append("__unknown__")
 
-            if relevant_key == "is_citation":
-                worthiness.append(sample["is_citation"])
-            else:
-                worthiness.append("__unknown__")
+                if relevant_key == "is_citation":
+                    worthiness.append(sample["is_citation"])
+                else:
+                    worthiness.append("__unknown__")
 
         return text, labels, sections, worthiness
 
