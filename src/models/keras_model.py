@@ -11,8 +11,8 @@ from src import evaluation
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
 BUFFER_SIZE = 11000
-bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
-                            trainable=True)
+bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1", trainable=True)
+# bert_layer = hub.KerasLayer("https://tfhub.dev/google/albert_xlarge/3", trainable=True, signature="tokens")
 FullTokenizer = bert.bert_tokenization.FullTokenizer
 max_seq_length = 511  # Your choice here.
 
@@ -53,19 +53,24 @@ class MultitaskLearner(Model):
             sequence_output
         )
         state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
+
+        # attention_layer = tf.keras.layers.Attention()(state_h)
+
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
             state_h
         )
-        section_output = tf.keras.layers.Dense(section_size+1, activation="softmax")(
-            state_h
-        )
-        worthiness_output = tf.keras.layers.Dense(worthiness_size+1, activation="softmax")(
-            state_h
-        )
+        # section_output = tf.keras.layers.Dense(section_size+1, activation="softmax")(
+        #     state_h
+        # )
+        # worthiness_output = tf.keras.layers.Dense(worthiness_size+1, activation="softmax")(
+        #     state_h
+        # )
 
         self.model = tf.keras.Model(
             inputs=[input_word_ids, input_mask, segment_ids],
-            outputs=[label_output, section_output, worthiness_output]
+            # outputs=[label_output, section_output, worthiness_output]
+            # outputs=[label_output]
+            outputs=label_output
         )
 
         self.model.summary()
@@ -78,11 +83,16 @@ class MultitaskLearner(Model):
             # target: A tensor with the same shape as output.
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
             y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
-            return K.binary_crossentropy(y_v * mask, y_pred * mask)
+            # return K.binary_crossentropy(y_v * mask, y_pred * mask)
+            print("True:", y_true[0], "\nTrue OneHot:", y_v[0], "Pred:", y_pred)
+            print("True OneHot Mask:", (y_v * mask)[0], "Pred Mask:", (y_pred * mask)[0])
+            return K.categorical_crossentropy(y_v * mask, y_pred * mask)
 
         # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
-        self.model.compile(optimizer='adam', loss=masked_loss_function, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
+        # self.model.compile(optimizer='adam', loss=masked_loss_function, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
+        self.model.compile(optimizer='adam', loss="sparse_categorical_crossentropy", metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
+        # self.model.compile(optimizer='adam', loss="sparse_categorical_crossentropy", metrics=["accuracy"])
 
     def fit_model(self, dataset):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
@@ -129,8 +139,8 @@ class MultitaskLearner(Model):
                 },
                 {
                     'dense': labels,
-                    'dense_1': sections,
-                    'dense_2': worthiness
+                    # 'dense_1': sections,
+                    # 'dense_2': worthiness
                 }
             )
         )
