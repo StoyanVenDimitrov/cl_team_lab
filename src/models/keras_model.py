@@ -78,7 +78,8 @@ class MultitaskLearner(Model):
             # target: A tensor with the same shape as output.
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
             y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
-            return K.binary_crossentropy(y_v * mask, y_pred * mask)
+            # TODO: lambdas for each task
+            return K.categorical_crossentropy(y_v * mask, y_pred * mask)
 
         # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
