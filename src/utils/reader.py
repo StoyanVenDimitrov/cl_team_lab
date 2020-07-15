@@ -129,7 +129,7 @@ class SciciteReader:
                 data.append(i)
 
 
-        for sample in data[:20]:
+        for sample in data:
             if "text" in sample.keys():
                 text.append(sample['text'])
             elif "string" in sample.keys():

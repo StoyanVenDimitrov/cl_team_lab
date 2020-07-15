@@ -27,6 +27,7 @@ class MultitaskLearner(Model):
         self.rnn_units = int(config["rnn_units"])
         self.batch_size = int(config['batch_size'])
         self.number_of_epochs = int(config['number_of_epochs'])
+        self.validation_step = int(config['validation_step'])
         self.mask_value = 1  # for masking missing label
 
     def create_model(
@@ -63,34 +64,39 @@ class MultitaskLearner(Model):
             state_h
         )
 
-        self.model = tf.keras.Model(
+        self.our_model = tf.keras.Model(
             inputs=[input_word_ids, input_mask, segment_ids],
             outputs=[label_output, section_output, worthiness_output]
         )
 
-        self.model.summary()
+        self.our_model.summary()
         tf.keras.utils.plot_model(
-            self.model, to_file="multi_input_and_output_model.png", show_shapes=True
+            self.our_model, to_file="multi_input_and_output_model.png", show_shapes=True
         )
         # for the loss object: https://www.dlology.com/blog/how-to-multi-task-learning-with-missing-labels-in-keras/
 
         def masked_loss_function(y_true, y_pred):
-            # target: A tensor with the same shape as output.
-            mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
+            mask = K.cast(K.equal(y_true, self.mask_value), K.floatx())
             y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
-            return K.binary_crossentropy(y_v * mask, y_pred * mask)
+
+            return K.categorical_crossentropy(y_v * mask, K.clip(y_pred * mask, min_value=1e-15, max_value=1e10))
 
         # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
-        self.model.compile(optimizer='adam', loss=masked_loss_function, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
+        self.our_model.compile(optimizer='adam', loss=masked_loss_function, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
 
     def fit_model(self, dataset, val_dataset):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
+        #val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
         val_dataset = val_dataset.padded_batch(self.batch_size, drop_remainder=True)
 
         dataset = dataset.shuffle(BUFFER_SIZE)
 
-        self.model.fit(dataset, epochs=self.number_of_epochs, validation_data = val_dataset)
+        self.our_model.fit(
+            dataset,
+            epochs=self.number_of_epochs,)
+        #     callbacks=[ValidateAfter(val_dataset, self.validation_step)]
+        # )
 
     def prepare_output_data(self, data):
         """tokenize and encode for label, section... """
@@ -186,3 +192,16 @@ def get_ids(tokens, tokenizer, max_seq_length):
         return token_ids[:max_seq_length]
     input_ids = token_ids + [0] * (max_seq_length-len(token_ids))
     return input_ids
+
+
+class ValidateAfter(tf.keras.callbacks.Callback):
+    def __init__(self, val_data, val_step):
+        super(ValidateAfter, self).__init__()
+        self.val_data = val_data,
+        self.val_step = val_step
+
+    def on_train_batch_end(self, batch, logs=None):
+        if batch > 1 and batch % self.val_step == 0:
+            print('Evaluation on validation dataset:')
+            self.model.evaluate(self.val_data)#, verbose=1)
+            print('##################')
