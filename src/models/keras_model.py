@@ -12,7 +12,7 @@ from src import evaluation
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
 BUFFER_SIZE = 11000
-bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
+bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/2",
                             trainable=True)
 FullTokenizer = bert.bert_tokenization.FullTokenizer
 max_seq_length = 511  # Your choice here.
@@ -40,8 +40,6 @@ class MultitaskLearner(Model):
                                            name="input_mask")
         segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
                                             name="segment_ids")
-        # bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/2",
-        #                             trainable=True)
         pooled_output, sequence_output = bert_layer([input_word_ids, input_mask, segment_ids])
         output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
             tf.keras.layers.LSTM(
@@ -74,12 +72,14 @@ class MultitaskLearner(Model):
         tf.keras.utils.plot_model(
             self.our_model, to_file="multi_input_and_output_model.png", show_shapes=True
         )
-        # for the loss object: https://www.dlology.com/blog/how-to-multi-task-learning-with-missing-labels-in-keras/
 
         def masked_loss_function(y_true, y_pred):
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
             y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
-            return K.categorical_crossentropy(y_v * mask, K.clip(y_pred * mask, min_value=1e-15, max_value=1e10))
+            return K.categorical_crossentropy(
+                y_v * mask,
+                K.clip(y_pred * mask, min_value=1e-15, max_value=1e10)
+            )
 
         # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
@@ -92,14 +92,13 @@ class MultitaskLearner(Model):
     def fit_model(self, dataset, val_dataset):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         #val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
-        val_dataset = val_dataset.padded_batch(self.batch_size, drop_remainder=True)
+        val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
-
         self.our_model.fit(
             dataset,
-            epochs=self.number_of_epochs,)
-        #     callbacks=[ValidateAfter(val_dataset, self.validation_step)]
-        # )
+            epochs=self.number_of_epochs,
+            callbacks=[ValidateAfter(val_dataset, self.validation_step)]
+        )
 
     def prepare_output_data(self, data):
         """tokenize and encode for label, section... """
@@ -205,9 +204,7 @@ class ValidateAfter(tf.keras.callbacks.Callback):
 
     def on_train_batch_end(self, batch, logs=None):
         if batch > 1 and batch % self.val_step == 0:
-            print('Evaluation on validation dataset:')
-            self.model.evaluate(self.val_data, verbose=1)
-            print('##################')
+            self.model.evaluate(self.val_data[0], verbose=1)
 
 
 class F1ForMultitask(tfa.metrics.F1Score):
