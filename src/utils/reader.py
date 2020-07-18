@@ -105,7 +105,7 @@ class SciciteReader:
             sample["tokens"] = tokens
         return data
 
-    def load_multitask_data(self, for_validation=False, multitask=False):
+    def load_data(self, for_validation=False, multitask=False):
 
         data = []
 
@@ -138,12 +138,12 @@ class SciciteReader:
 
             relevant_key = sample["relevant_key"]
 
-            if multitask:
-                if relevant_key == "label":
+            if relevant_key == "label":
                     labels.append(sample["label"])
-                else:
-                    labels.append("__unknown__")
+            else:
+                labels.append("__unknown__")
 
+            if multitask:
                 if relevant_key == "section_title":
                     # avoid 'related work' to be tokenized with two labels
                     sections.append(sample["section_title"].split(' ')[0])

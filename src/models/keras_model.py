@@ -2,6 +2,7 @@
 import tensorflow as tf
 from src.models.model import Model
 from tensorflow.keras import backend as K
+import tensorflow_addons as tfa
 
 from src import evaluation
 
@@ -21,6 +22,7 @@ class MultitaskLearner(Model):
         self.batch_size = int(config['batch_size'])
         self.number_of_epochs = int(config['number_of_epochs'])
         self.mask_value = 1  # for masking missing label
+        self.validation_step = 2
 
     def create_model(
         self, vocab_size, labels_size, section_size, worthiness_size
@@ -67,22 +69,31 @@ class MultitaskLearner(Model):
         # for the loss object: https://www.dlology.com/blog/how-to-multi-task-learning-with-missing-labels-in-keras/
 
         def masked_loss_function(y_true, y_pred):
-            # target: A tensor with the same shape as output.
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
             y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
-            return K.categorical_crossentropy(y_v * mask, y_pred * mask)
+            return K.categorical_crossentropy(
+                y_v * mask,
+                K.clip(y_pred * mask, min_value=1e-15, max_value=1e10)
+            )
 
         # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
-        self.model.compile(optimizer='adam', loss=masked_loss_function, metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
+        self.model.compile(
+            optimizer='adam',
+            loss=masked_loss_function,
+            metrics={'dense': F1ForMultitask(num_classes=labels_size)}  # , average='macro')}
+        )
 
     def fit_model(self, dataset, val_dataset):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
-        val_dataset = val_dataset.padded_batch(self.batch_size, drop_remainder=True)
-
+        # val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
+        val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
-
-        self.model.fit(dataset, epochs=self.number_of_epochs, validation_data = val_dataset)
+        self.model.fit(
+            dataset,
+            epochs=self.number_of_epochs,
+            callbacks=[ValidateAfter(val_dataset, self.validation_step)]
+        )
 
 
     def prepare_data(self, data):
@@ -118,3 +129,66 @@ class MultitaskLearner(Model):
             )
         )
         return dataset
+
+    def create_dev_dataset(self, text, labels):
+        dataset = tf.data.Dataset.from_tensor_slices(
+            (
+                text,
+                {
+                    'dense': labels
+                }
+            )
+        )
+        return dataset
+
+class ValidateAfter(tf.keras.callbacks.Callback):
+    def __init__(self, val_data, val_step):
+        super(ValidateAfter, self).__init__()
+        self.val_data = val_data,
+        self.val_step = val_step
+
+    def on_train_batch_end(self, batch, logs=None):
+        if batch > 1 and batch % self.val_step == 0:
+            self.model.evaluate(self.val_data[0], verbose=1)
+
+
+class F1ForMultitask(tfa.metrics.F1Score):
+    def __init__(
+        self,
+        num_classes,
+        average=None,
+        threshold=None,
+        name: str = "f1_score",
+        dtype=None,
+    ):
+        super().__init__(num_classes-1, average, threshold, name=name, dtype=dtype)
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        # skip to count samples with label __unknown__
+        # mask = K.cast(K.not_equal(y_true, 1), K.floatx())
+        if self.threshold is None:
+            threshold = tf.reduce_max(y_pred, axis=-1, keepdims=True)
+            # make sure [0, 0, 0] doesn't become [1, 1, 1]
+            # Use abs(x) > eps, instead of x != 0 to check for zero
+            y_pred = tf.logical_and(y_pred >= threshold, tf.abs(y_pred) > 1e-12)
+        else:
+            y_pred = y_pred > self.threshold
+        y_true = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
+        y_true = tf.cast(y_true, self.dtype)
+        y_pred = tf.cast(y_pred, self.dtype)
+        # # skip counting samples where the PAD token is predicted
+        # mask_padding = K.expand_dims(K.cast(K.not_equal(y_pred[:,0], 1), K.floatx()), -1)
+        # y_pred = y_pred * mask_padding
+
+        def _weighted_sum(val, sample_weight):
+            if sample_weight is not None:
+                val = tf.math.multiply(val, tf.expand_dims(sample_weight, 1))
+            # return tf.reduce_sum(val*mask, axis=self.axis)
+            return tf.reduce_sum(val, axis=self.axis)[2:]
+        self.true_positives.assign_add(_weighted_sum(y_pred * y_true, sample_weight))
+        self.false_positives.assign_add(
+            _weighted_sum(y_pred * (1 - y_true), sample_weight)
+        )
+        self.false_negatives.assign_add(
+            _weighted_sum((1 - y_pred) * y_true, sample_weight)
+        )
