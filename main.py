@@ -2,6 +2,7 @@ from src.utils import utils
 from src.evaluation import custom_macro_f1_score, custom_micro_f1_score
 from src.utils.reader import SciciteReader
 from src.models.keras_model import MultitaskLearner
+from src.models.keras_model import SingletaskLearner
 import configparser
 import argparse
 import mlflow
@@ -18,7 +19,7 @@ def keras_multitask():
 
     text_dev, labels_dev, _, _ = reader.load_data(multitask=False, for_validation=True)
     keras_model = MultitaskLearner(
-        config["multitask_trainer"]
+        config["single_trainer"]
     )
     text_tensor, text_tokenizer = keras_model.prepare_data(text)
     labels_tensor, labels_tokenizer = keras_model.prepare_data(labels)
@@ -50,8 +51,40 @@ def keras_multitask():
     keras_model.fit_model(dataset, dev_dataset)
 
 
+def keras_singletask():
+    reader = SciciteReader(config["trainer"]["dataset"])
+    text, labels, _, _ = reader.load_data(multitask=False)
+
+    text_dev, labels_dev, _, _ = reader.load_data(multitask=False, for_validation=True)
+    keras_model = SingletaskLearner(
+        config["singletask_trainer"]
+    )
+    text_tensor, text_tokenizer = keras_model.prepare_data(text)
+    labels_tensor, labels_tokenizer = keras_model.prepare_data(labels)
+
+    text_tensor_dev = keras_model.prepare_dev_data(text_dev, text_tokenizer)
+    labels_tensor_dev = keras_model.prepare_dev_data(labels_dev, labels_tokenizer)
+
+    dataset = keras_model.create_dataset(
+        text_tensor,
+        labels_tensor
+    )
+    dev_dataset = keras_model.create_dev_dataset(
+        text_tensor_dev,
+        labels_tensor_dev
+    )
+
+    vocab_size = len(text_tokenizer.word_index.keys())
+    labels_size = len(labels_tokenizer.word_index.keys())
+
+    keras_model.create_model(
+        vocab_size, labels_size
+    )
+    keras_model.fit_model(dataset, dev_dataset)
+
+
 if __name__ == "__main__":
-    keras_multitask()
+    keras_singletask()
     # parser = argparse.ArgumentParser()
     #
     # parser.add_argument(

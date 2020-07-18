@@ -22,7 +22,7 @@ class MultitaskLearner(Model):
         self.batch_size = int(config['batch_size'])
         self.number_of_epochs = int(config['number_of_epochs'])
         self.mask_value = 1  # for masking missing label
-        self.validation_step = 2
+        self.validation_step = 20
 
     def create_model(
         self, vocab_size, labels_size, section_size, worthiness_size
@@ -140,6 +140,122 @@ class MultitaskLearner(Model):
             )
         )
         return dataset
+
+
+class SingletaskLearner(Model):
+    """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
+
+    def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
+        super().__init__(config)
+        # self.create_model(
+        self.embedding_dim = int(config["embedding_dim"])
+        self.rnn_units = int(config["rnn_units"])
+        self.batch_size = int(config['batch_size'])
+        self.number_of_epochs = int(config['number_of_epochs'])
+        self.mask_value = 1  # for masking missing label
+        self.validation_step = 20
+
+    def create_model(
+        self, vocab_size, labels_size
+    ):
+        text_input_layer = tf.keras.Input(
+            shape=(None,), dtype=tf.int32, name="Input_1"
+        )
+        embeddings_layer = tf.keras.layers.Embedding(
+            vocab_size, self.embedding_dim, mask_zero=True
+        )
+
+        input_embedding = embeddings_layer(text_input_layer)
+        output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
+            tf.keras.layers.LSTM(
+                self.rnn_units,
+                stateful=False,
+                return_sequences=True,
+                return_state=True,
+                recurrent_initializer="glorot_uniform",
+            )
+        )(
+            input_embedding
+        )
+        state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
+        label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
+            state_h
+        )
+
+        self.model = tf.keras.Model(
+            inputs=text_input_layer, outputs=label_output
+        )
+
+        self.model.summary()
+        tf.keras.utils.plot_model(
+            self.model, to_file="single_input_and_output_model.png", show_shapes=True
+        )
+
+        def loss_function(y_true, y_pred):
+            loss = tf.keras.losses.sparse_categorical_crossentropy(
+                y_true, y_pred, from_logits=False
+            )
+            return loss
+
+        self.model.compile(
+            optimizer='adam',
+            loss=loss_function,
+            metrics={'dense': F1ForMultitask(num_classes=labels_size)}  # , average='macro')}
+        )
+
+    def fit_model(self, dataset, val_dataset):
+        dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
+        val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
+        dataset = dataset.shuffle(BUFFER_SIZE)
+        self.model.fit(
+            dataset,
+            epochs=self.number_of_epochs,
+            callbacks=[ValidateAfter(val_dataset, self.validation_step)]
+        )
+
+    def prepare_data(self, data):
+        """tokenize and encode for text, label, section... """
+        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
+
+        filtered_data = list(filter('__unknown__'.__ne__, data))
+        component_tokenizer.fit_on_texts(filtered_data)
+
+        tensor = component_tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                               padding='post')
+        # TODO: pad batches, not the whole set
+        return tensor, component_tokenizer
+
+    def prepare_dev_data(self, data, tokenizer):
+        tensor = tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                               padding='post')
+        return tensor
+
+    def create_dataset(self, text, labels):
+        dataset = tf.data.Dataset.from_tensor_slices(
+            (
+                text,
+                {
+                    'dense': labels
+                }
+            )
+        )
+        return dataset
+
+    def create_dev_dataset(self, text, labels):
+        dataset = tf.data.Dataset.from_tensor_slices(
+            (
+                text,
+                {
+                    'dense': labels
+                }
+            )
+        )
+        return dataset
+
 
 class ValidateAfter(tf.keras.callbacks.Callback):
     def __init__(self, val_data, val_step):
