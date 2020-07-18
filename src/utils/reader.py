@@ -105,7 +105,7 @@ class SciciteReader:
             sample["tokens"] = tokens
         return data
 
-    def load_multitask_data(self, for_validation=False, multitask=False):
+    def load_data(self, for_validation=False, multitask=False):
 
         data = []
 
@@ -129,7 +129,7 @@ class SciciteReader:
                 data.append(i)
 
 
-        for sample in data:
+        for sample in data[:20]:
             if "text" in sample.keys():
                 text.append(sample['text'])
             elif "string" in sample.keys():
