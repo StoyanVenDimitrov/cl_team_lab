@@ -16,7 +16,7 @@ BUFFER_SIZE = 11000
 bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/2",
                             trainable=True)
 FullTokenizer = bert.bert_tokenization.FullTokenizer
-max_seq_length = 511  # Your choice here.
+max_seq_length = 50  # Your choice here.
 
 
 class MultitaskLearner(Model):
@@ -24,13 +24,13 @@ class MultitaskLearner(Model):
 
     def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
         super().__init__(config)
-        # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
         self.rnn_units = int(config["rnn_units"])
         self.batch_size = int(config['batch_size'])
         self.number_of_epochs = int(config['number_of_epochs'])
         self.validation_step = int(config['validation_step'])
         self.mask_value = 1  # for masking missing label
+        self.learning_rate = float(config["learning_rate"])
 
     def create_model(
         self, labels_size, section_size, worthiness_size
@@ -42,6 +42,7 @@ class MultitaskLearner(Model):
         segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
                                             name="segment_ids")
         pooled_output, sequence_output = bert_layer([input_word_ids, input_mask, segment_ids])
+
         output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
             tf.keras.layers.LSTM(
                 self.rnn_units,
@@ -89,8 +90,11 @@ class MultitaskLearner(Model):
 
         # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
+        optimizer = tf.keras.optimizers.Adam(learning_rate=1-self.learning_rate)
+
         self.our_model.compile(
             optimizer='adam',
+            # optimizer=optimizer,
             loss=masked_loss_function,
             metrics={'dense': F1ForMultitask(num_classes=labels_size)} #, average='macro')}
         )
