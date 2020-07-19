@@ -15,7 +15,7 @@ BUFFER_SIZE = 11000
 bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/2",
                             trainable=True)
 FullTokenizer = bert.bert_tokenization.FullTokenizer
-max_seq_length = 511  # Your choice here.
+max_seq_length = 100  # Your choice here.
 
 
 class MultitaskLearner(Model):
@@ -26,6 +26,7 @@ class MultitaskLearner(Model):
         # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
         self.rnn_units = int(config["rnn_units"])
+        self.atention_size = 2 * self.rnn_units
         self.batch_size = int(config['batch_size'])
         self.number_of_epochs = int(config['number_of_epochs'])
         self.validation_step = int(config['validation_step'])
@@ -52,7 +53,8 @@ class MultitaskLearner(Model):
         )(
             sequence_output
         )
-        state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
+        # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
+        state_h = WeirdAttention(self.atention_size)(output)
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
             state_h
         )
@@ -176,6 +178,7 @@ class SingletaskLearner(Model):
         # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
         self.rnn_units = int(config["rnn_units"])
+        self.atention_size = 2 * self.rnn_units
         self.batch_size = int(config['batch_size'])
         self.number_of_epochs = int(config['number_of_epochs'])
         self.mask_value = 1  # for masking missing label
@@ -202,7 +205,8 @@ class SingletaskLearner(Model):
         )(
             sequence_output
         )
-        state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
+        # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
+        state_h = WeirdAttention(self.atention_size)(output)
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
             state_h
         )
@@ -318,6 +322,24 @@ def get_ids(tokens, tokenizer, max_seq_length):
         return token_ids[:max_seq_length]
     input_ids = token_ids + [0] * (max_seq_length-len(token_ids))
     return input_ids
+
+
+class WeirdAttention(tf.keras.layers.Layer):
+    """attention as in Cohan et al., 2019"""
+    def __init__(self, units):
+        super(WeirdAttention, self).__init__()
+        self.units = units
+        self.w = self.add_weight(shape=(self.units, 1),
+                                 initializer='random_normal',
+                                 trainable=True)
+
+    # TODO: strictly, self.w should be added in the build():
+    # https://www.tensorflow.org/guide/keras/custom_layers_and_models#best_practice_deferring_weight_creation_until_the_shape_of_the_inputs_is_known
+    def call(self, inputs):
+        alpha_score = tf.linalg.matvec(inputs, tf.squeeze(self.w))
+        alpha = K.softmax(alpha_score)
+        scored_input = inputs * tf.expand_dims(alpha, axis=-1)
+        return tf.reduce_sum(scored_input, 1)
 
 
 class ValidateAfter(tf.keras.callbacks.Callback):
