@@ -3,6 +3,7 @@ import torch
 from transformers import AlbertTokenizer, AlbertConfig, AlbertForSequenceClassification
 from tqdm import trange, tqdm
 from sklearn.metrics import f1_score, accuracy_score, classification_report
+from src.utils.utils import wandb_log_report
 
 from src.utils.utils import make_filename
 
@@ -25,7 +26,7 @@ class AlbertModel:
         self.model.to(self.device)
 
     def encode(self, text):
-        return self.tokenizer(text["string"], truncation=True, max_len=self.max_len, padding="max_length")
+        return self.tokenizer(text["string"], truncation=True, max_length=self.max_len, padding="max_length")
 
     def prepare_data(self, train, dev, test, batch_size=8):
         train_tokens = train.map(self.encode, batched=True)
@@ -87,8 +88,14 @@ class AlbertModel:
                     dev_pred.append(torch.argmax(dev_outputs[1].detach().cpu(), dim=1).tolist())
                 dev_y_true = [v for l in dev_true for v in l]
                 dev_y_pred = [v for l in dev_pred for v in l]
+                dev_acc = accuracy_score(dev_y_true, dev_y_pred)
                 dev_f1 = f1_score(dev_y_true, dev_y_pred, average="macro")
-                print(f"Dev f1: \t{dev_f1}")
+                print(f"Dev accuracy: \t{dev_acc}", f"Dev f1: \t{dev_f1}")
+
+                val_report = classification_report(dev_y_true, dev_y_pred, labels=[0, 1, 2], output_dict=True)
+
+                if self.args.log_metrics:
+                    wandb_log_report("val", val_report)
 
         torch.save(self.model.state_dict(), os.path.join("saved_models", make_filename(self.config)))
 
@@ -111,7 +118,11 @@ class AlbertModel:
             test_f1 = f1_score(test_y_true, test_y_pred, average="macro")
             print(f"Test f1: \t{test_f1}")
 
+        test_report = classification_report(test_y_true, test_y_pred, labels=[0,1,2], output_dict=True)
         if print_report:
             print(classification_report(test_y_true, test_y_pred, labels=[0,1,2]))
+
+        if self.args.log_metrics:
+            wandb_log_report("test", test_report)
 
 
