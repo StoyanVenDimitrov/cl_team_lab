@@ -19,7 +19,7 @@ def keras_multitask():
 
     text_dev, labels_dev, _, _ = reader.load_data(multitask=False, for_validation=True)
     keras_model = MultitaskLearner(
-        config["single_trainer"]
+        config["multitask_trainer"]
     )
     text_tensor, text_tokenizer = keras_model.prepare_data(text)
     labels_tensor, labels_tokenizer = keras_model.prepare_data(labels)
@@ -84,7 +84,7 @@ def keras_singletask():
 
 
 if __name__ == "__main__":
-    keras_singletask()
+    keras_multitask()
     # parser = argparse.ArgumentParser()
     #
     # parser.add_argument(
