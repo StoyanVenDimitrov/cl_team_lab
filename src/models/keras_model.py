@@ -4,8 +4,11 @@ from src.models.model import Model
 from tensorflow.keras import backend as K
 import tensorflow_addons as tfa
 from sklearn.metrics import classification_report
+import numpy as np
+from tqdm.keras import TqdmCallback
 
 from src import evaluation
+from src.utils import utils
 
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
@@ -16,6 +19,8 @@ class MultitaskLearner(Model):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
     def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
+        pre_config = config["preprocessor"]
+        config = config["singletask_trainer"]
         super().__init__(config)
         # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
@@ -27,6 +32,9 @@ class MultitaskLearner(Model):
         self.max_seq_len = int(config["max_len"])
         self.use_attention = True if config["use_attention"] == "True" else False
         self.validation_step = int(config['validation_step'])
+        
+        self.logdir = utils.make_logdir(pre_config, config)
+        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
 
     def create_model(
         self, vocab_size, labels_size, section_size, worthiness_size
@@ -93,6 +101,8 @@ class MultitaskLearner(Model):
 
     def fit_model(self, dataset, val_dataset):
         print("Fitting model...")
+        print(dataset)
+        print(val_dataset)
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         # val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
         val_dataset = val_dataset.padded_batch(5, drop_remainder=True)
@@ -101,10 +111,10 @@ class MultitaskLearner(Model):
         self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
-            callbacks=[ValidateAfter(val_dataset, self.validation_step)]
+            callbacks=[ValidateAfter(val_dataset, self.validation_step), self.tensorboard_callback, TqdmCallback(verbose=2)]
         )
 
-    def prepare_data(self, data):
+    def prepare_data(self, data, max_len=None):
         """tokenize and encode for text, label, section... """
         print("Preparing data...")
         component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
@@ -115,15 +125,21 @@ class MultitaskLearner(Model):
         tensor = component_tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post', maxlen=self.max_seq_len)
+                                                               padding='post')
+                                                               # padding='post', maxlen=self.max_seq_len)
+        if max_len:
+            tensor = tensor[:,:max_len]
         # TODO: pad batches, not the whole set
         return tensor, component_tokenizer
 
-    def prepare_dev_data(self, data, tokenizer):
+    def prepare_dev_data(self, data, tokenizer, max_len=None):
         tensor = tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post', maxlen=self.max_seq_len)
+                                                               padding='post')
+        if max_len:
+            tensor = tensor[:,:max_len]
+        # padding='post', maxlen=self.max_seq_len)
         return tensor
 
     def create_dataset(self, text, labels, sections, worthiness):
@@ -151,7 +167,8 @@ class MultitaskLearner(Model):
         )
         return dataset
 
-    def save_model(self, path):
+    def save_model(self):
+        path = os.path.join(self.logdir, "model")
         self.model.save(path)
 
 
@@ -159,6 +176,8 @@ class SingletaskLearner(Model):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
     def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
+        pre_config = config["preprocessor"]
+        config = config["singletask_trainer"]
         super().__init__(config)
         # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
@@ -169,6 +188,9 @@ class SingletaskLearner(Model):
         self.mask_value = 1  # for masking missing label
         self.use_attention = True if config["use_attention"] == "True" else False
         self.validation_step = int(config['validation_step'])
+
+        self.logdir = utils.make_logdir(pre_config, config)
+        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
 
     def create_model(
         self, vocab_size, labels_size
@@ -219,6 +241,7 @@ class SingletaskLearner(Model):
         self.model.compile(
             optimizer='adam',
             loss=loss_function,
+            # metrics={'dense': F1ForMultitask(num_classes=labels_size, log_metrics=self.args.log_metrics)}  # , average='macro')}
             metrics={'dense': F1ForMultitask(num_classes=labels_size)}  # , average='macro')}
         )
 
@@ -231,10 +254,10 @@ class SingletaskLearner(Model):
         self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
-            callbacks=[ValidateAfter(val_dataset, self.validation_step)]
+            callbacks=[ValidateAfter(val_dataset, self.validation_step), self.tensorboard_callback, TqdmCallback(verbose=2)]
         )
 
-    def prepare_data(self, data):
+    def prepare_data(self, data, max_len=None):
         """tokenize and encode for text, label, section... """
         print("Preparing data...")
         component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
@@ -245,15 +268,21 @@ class SingletaskLearner(Model):
         tensor = component_tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post', maxlen=self.max_seq_len)
+                                                               padding='post')
+        # padding='post', maxlen=self.max_seq_len)
+        if max_len:
+            tensor = tensor[:,:max_len]
         # TODO: pad batches, not the whole set
         return tensor, component_tokenizer
 
-    def prepare_dev_data(self, data, tokenizer):
+    def prepare_dev_data(self, data, tokenizer, max_len=None):
         tensor = tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post', maxlen=self.max_seq_len)
+                                                               padding='post')
+        if max_len:
+            tensor = tensor[:,:max_len]
+        # padding='post', maxlen=self.max_seq_len)
         return tensor
 
     def create_dataset(self, text, labels):
@@ -279,7 +308,8 @@ class SingletaskLearner(Model):
         )
         return dataset
 
-    def save_model(self, path):
+    def save_model(self):
+        path = os.path.join(self.logdir, "model")
         self.model.save(path)
 
 
@@ -316,6 +346,7 @@ class F1ForMultitask(tfa.metrics.F1Score):
     def __init__(
         self,
         num_classes,
+        # log_metrics,
         average=None,
         threshold=None,
         name: str = "f1_score",
@@ -324,11 +355,12 @@ class F1ForMultitask(tfa.metrics.F1Score):
         super().__init__(num_classes-1, average, threshold, name=name, dtype=dtype)
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-        print(classification_report(y_true.numpy().flatten(), y_pred.numpy()[:,2:].argmax(1)+2, labels=[2,3,4]))
-        print(y_true.numpy().shape)
-        print(y_true.numpy()[:20])
-        print(y_pred.numpy()[:,2:].argmax(1).shape)
-        print((y_pred.numpy()[:,2:].argmax(1)+2)[:20])
+        false_idxs = np.concatenate((np.where(y_true.numpy().flatten() == 0)[0], np.where(y_true.numpy().flatten() == 1)[0]))
+        _true = np.delete(y_true.numpy().flatten(), false_idxs)
+        _pred = np.delete(y_pred.numpy()[:,2:].argmax(1)+2, false_idxs)
+        report = classification_report(_true, _pred, labels=[2,3,4], output_dict=True)
+        # if log_metrics:
+        #     wandb_log_report(report)
         # skip to count samples with label __unknown__
         mask = K.cast(K.not_equal(y_true, 1), K.floatx())
         if self.threshold is None:
@@ -358,3 +390,6 @@ class F1ForMultitask(tfa.metrics.F1Score):
             _weighted_sum((1 - y_pred) * y_true, sample_weight)
         )
         self.weights_intermediate.assign_add(_weighted_sum(y_true, sample_weight))
+
+        # if self.log_metrics:
+        #     wandb_log_report("test", test_report)

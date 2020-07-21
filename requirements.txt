@@ -1,9 +1,10 @@
-nb-black==1.0.7
-jupyterlab==2.1.0
-pandas==0.23.4
-pandas-compat==0.1.1
-xai==0.0.5
-jsonlines==1.2.0
-tqdm==4.46.0
+tensorflow==2.2.0
+wandb==0.9.3
+jsonlines
+tensorflow-datasets
+tensorflow-addons
+nltk
+spacy
+scikit-learn
 https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.2.5/en_core_sci_lg-0.2.5.tar.gz
 

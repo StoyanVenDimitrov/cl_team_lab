@@ -1,6 +1,7 @@
 import configparser
 import importlib
 import wandb
+import os
 
 
 def load_config(path):
@@ -9,8 +10,15 @@ def load_config(path):
     return config
 
 
+def write_config(path, config1, config2):
+    with open(path+"config.txt", "w") as f:
+        for c in [config1, config2]:
+            for k,v in c.items():
+                f.write(k+" = "+v+"\n")
+
+
 def make_filename(config):
-    filename = ""
+    filename = "PARAMS=="
     for i, para in enumerate(config):
         sep = "&" if i > 0 else ""
         if "model_path" in para:
@@ -19,9 +27,23 @@ def make_filename(config):
             stopwords = config[para].split("/")[-1].split(".")[0]
             filename += f"{stopwords}-"
             continue
+        elif "path" in para or "dataset" in para:
+            continue
         filename += f"{sep}{para}={config[para]}"
     return filename
 
+
+def make_logdir(config1, config2):
+    filename1 = make_filename(config1)
+    filename2 = make_filename(config2)
+    
+    logdir = os.path.join("saved_models", filename1+"_"+filename2, "logs")
+    if not os.path.isdir(logdir):
+        os.makedirs(logdir)
+
+    write_config(logdir, config1, config2)
+
+    return logdir
 
 def import_module(dotted_path):
     module_parts = dotted_path.split(".")

@@ -230,9 +230,6 @@ class SciciteReader:
                 else:
                     worthiness.append("__unknown__")
 
-        if self.balance_dataset:
-            pass
-
         return text, labels, sections, worthiness
 
     @staticmethod
