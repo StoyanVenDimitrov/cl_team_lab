@@ -358,17 +358,9 @@ class F1ForMultitask(tfa.metrics.F1Score):
         false_idxs = np.concatenate((np.where(y_true.numpy().flatten() == 0)[0], np.where(y_true.numpy().flatten() == 1)[0]))
         _true = np.delete(y_true.numpy().flatten(), false_idxs)
         _pred = np.delete(y_pred.numpy()[:,2:].argmax(1)+2, false_idxs)
-<<<<<<< HEAD
         report = classification_report(_true, _pred, labels=[2,3,4], output_dict=True)
         # if log_metrics:
         #     wandb_log_report(report)
-=======
-        print(classification_report(_true, _pred, labels=[2,3,4]))
-        print(_true.shape)
-        print(_true[:20])
-        print(_pred.shape)
-        print(_pred[:20])
->>>>>>> 89ad156bd09ecc0eb77673df7ab5fb60beca1ff6
         # skip to count samples with label __unknown__
         mask = K.cast(K.not_equal(y_true, 1), K.floatx())
         if self.threshold is None:
