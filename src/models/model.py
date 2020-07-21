@@ -31,7 +31,7 @@ class Model:
         return
 
     @abc.abstractmethod
-    def save_model(self, model=None):
+    def save_model(self, path):
         """
         save the model to reuse it for inference
         :return:

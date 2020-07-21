@@ -24,6 +24,7 @@ class MultitaskLearner(Model):
         self.batch_size = int(config['batch_size'])
         self.number_of_epochs = int(config['number_of_epochs'])
         self.mask_value = 1  # for masking missing label
+        self.max_seq_len = int(config["max_len"])
         self.use_attention = True if config["use_attention"] == "True" else False
         self.validation_step = int(config['validation_step'])
 
@@ -94,7 +95,7 @@ class MultitaskLearner(Model):
         print("Fitting model...")
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         # val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
-        val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
+        val_dataset = val_dataset.padded_batch(5, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
         self.model.run_eagerly = True  # solves problem of converting tensor to numpy array https://github.com/tensorflow/tensorflow/issues/27519
         self.model.fit(
@@ -114,7 +115,7 @@ class MultitaskLearner(Model):
         tensor = component_tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post')
+                                                               padding='post', maxlen=self.max_seq_len)
         # TODO: pad batches, not the whole set
         return tensor, component_tokenizer
 
@@ -122,7 +123,7 @@ class MultitaskLearner(Model):
         tensor = tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post')
+                                                               padding='post', maxlen=self.max_seq_len)
         return tensor
 
     def create_dataset(self, text, labels, sections, worthiness):
@@ -244,7 +245,7 @@ class SingletaskLearner(Model):
         tensor = component_tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post')
+                                                               padding='post', maxlen=self.max_seq_len)
         # TODO: pad batches, not the whole set
         return tensor, component_tokenizer
 
@@ -252,7 +253,7 @@ class SingletaskLearner(Model):
         tensor = tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post')
+                                                               padding='post', maxlen=self.max_seq_len)
         return tensor
 
     def create_dataset(self, text, labels):
@@ -323,11 +324,13 @@ class F1ForMultitask(tfa.metrics.F1Score):
         super().__init__(num_classes-1, average, threshold, name=name, dtype=dtype)
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-        # print(classification_report(y_true.numpy(), y_pred.numpy(), labels=[2,3,4]))
-        # print(y_true.numpy()[:20])
-        # print(y_pred.numpy()[:20])
+        print(classification_report(y_true.numpy().flatten(), y_pred.numpy()[:,2:].argmax(1)+2, labels=[2,3,4]))
+        print(y_true.numpy().shape)
+        print(y_true.numpy()[:20])
+        print(y_pred.numpy()[:,2:].argmax(1).shape)
+        print((y_pred.numpy()[:,2:].argmax(1)+2)[:20])
         # skip to count samples with label __unknown__
-        # mask = K.cast(K.not_equal(y_true, 1), K.floatx())
+        mask = K.cast(K.not_equal(y_true, 1), K.floatx())
         if self.threshold is None:
             threshold = tf.reduce_max(y_pred, axis=-1, keepdims=True)
             # make sure [0, 0, 0] doesn't become [1, 1, 1]
@@ -345,8 +348,8 @@ class F1ForMultitask(tfa.metrics.F1Score):
         def _weighted_sum(val, sample_weight):
             if sample_weight is not None:
                 val = tf.math.multiply(val, tf.expand_dims(sample_weight, 1))
-            # return tf.reduce_sum(val*mask, axis=self.axis)
-            return tf.reduce_sum(val, axis=self.axis)[2:]
+            return tf.reduce_sum(val*mask, axis=self.axis)[2:]
+            # return tf.reduce_sum(val, axis=self.axis)
         self.true_positives.assign_add(_weighted_sum(y_pred * y_true, sample_weight))
         self.false_positives.assign_add(
             _weighted_sum(y_pred * (1 - y_true), sample_weight)
@@ -354,3 +357,4 @@ class F1ForMultitask(tfa.metrics.F1Score):
         self.false_negatives.assign_add(
             _weighted_sum((1 - y_pred) * y_true, sample_weight)
         )
+        self.weights_intermediate.assign_add(_weighted_sum(y_true, sample_weight))

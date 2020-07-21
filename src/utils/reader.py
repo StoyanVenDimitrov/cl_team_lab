@@ -205,9 +205,6 @@ class SciciteReader:
                 _text = sample['string']
                 # text.append(sample['string'])
 
-            if self.lemmatize:
-                pass
-
             if self.lowercase:
                 _text = _text.lower()
 
