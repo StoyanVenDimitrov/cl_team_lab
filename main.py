@@ -21,12 +21,12 @@ def keras_multitask():
     keras_model = MultitaskLearner(
         config["multitask_trainer"]
     )
-    text_tensor, text_tokenizer = keras_model.prepare_data(text)
+    text_tensor, text_tokenizer = keras_model.prepare_data(text, max_len=int(config["multitask_trainer"]["max_len"]))
     labels_tensor, labels_tokenizer = keras_model.prepare_data(labels)
     sections_tensor, sections_tokenizer = keras_model.prepare_data(sections)
     worthiness_tensor, worthiness_tokenizer = keras_model.prepare_data(worthiness)
 
-    text_tensor_dev = keras_model.prepare_dev_data(text_dev, text_tokenizer)
+    text_tensor_dev = keras_model.prepare_dev_data(text_dev, text_tokenizer, max_len=int(config["multitask_trainer"]["max_len"]))
     labels_tensor_dev = keras_model.prepare_dev_data(labels_dev, labels_tokenizer)
 
     dataset = keras_model.create_dataset(
@@ -64,10 +64,10 @@ def keras_singletask():
     keras_model = SingletaskLearner(
         config["singletask_trainer"]
     )
-    text_tensor, text_tokenizer = keras_model.prepare_data(text)
+    text_tensor, text_tokenizer = keras_model.prepare_data(text, max_len=int(config["multitask_trainer"]["max_len"]))
     labels_tensor, labels_tokenizer = keras_model.prepare_data(labels)
 
-    text_tensor_dev = keras_model.prepare_dev_data(text_dev, text_tokenizer)
+    text_tensor_dev = keras_model.prepare_dev_data(text_dev, text_tokenizer, max_len=int(config["multitask_trainer"]["max_len"]))
     labels_tensor_dev = keras_model.prepare_dev_data(labels_dev, labels_tokenizer)
 
     dataset = keras_model.create_dataset(

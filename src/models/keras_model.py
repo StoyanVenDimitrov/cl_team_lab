@@ -4,6 +4,7 @@ from src.models.model import Model
 from tensorflow.keras import backend as K
 import tensorflow_addons as tfa
 from sklearn.metrics import classification_report
+import numpy as np
 
 from src import evaluation
 
@@ -93,6 +94,8 @@ class MultitaskLearner(Model):
 
     def fit_model(self, dataset, val_dataset):
         print("Fitting model...")
+        print(dataset)
+        print(val_dataset)
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         # val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
         val_dataset = val_dataset.padded_batch(5, drop_remainder=True)
@@ -104,7 +107,7 @@ class MultitaskLearner(Model):
             callbacks=[ValidateAfter(val_dataset, self.validation_step)]
         )
 
-    def prepare_data(self, data):
+    def prepare_data(self, data, max_len=None):
         """tokenize and encode for text, label, section... """
         print("Preparing data...")
         component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
@@ -115,15 +118,21 @@ class MultitaskLearner(Model):
         tensor = component_tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post', maxlen=self.max_seq_len)
+                                                               padding='post')
+                                                               # padding='post', maxlen=self.max_seq_len)
+        if max_len:
+            tensor = tensor[:,:max_len]
         # TODO: pad batches, not the whole set
         return tensor, component_tokenizer
 
-    def prepare_dev_data(self, data, tokenizer):
+    def prepare_dev_data(self, data, tokenizer, max_len=None):
         tensor = tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post', maxlen=self.max_seq_len)
+                                                               padding='post')
+        if max_len:
+            tensor = tensor[:,:max_len]
+        # padding='post', maxlen=self.max_seq_len)
         return tensor
 
     def create_dataset(self, text, labels, sections, worthiness):
@@ -234,7 +243,7 @@ class SingletaskLearner(Model):
             callbacks=[ValidateAfter(val_dataset, self.validation_step)]
         )
 
-    def prepare_data(self, data):
+    def prepare_data(self, data, max_len=None):
         """tokenize and encode for text, label, section... """
         print("Preparing data...")
         component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
@@ -245,15 +254,21 @@ class SingletaskLearner(Model):
         tensor = component_tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post', maxlen=self.max_seq_len)
+                                                               padding='post')
+        # padding='post', maxlen=self.max_seq_len)
+        if max_len:
+            tensor = tensor[:,:max_len]
         # TODO: pad batches, not the whole set
         return tensor, component_tokenizer
 
-    def prepare_dev_data(self, data, tokenizer):
+    def prepare_dev_data(self, data, tokenizer, max_len=None):
         tensor = tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post', maxlen=self.max_seq_len)
+                                                               padding='post')
+        if max_len:
+            tensor = tensor[:,:max_len]
+        # padding='post', maxlen=self.max_seq_len)
         return tensor
 
     def create_dataset(self, text, labels):
@@ -324,11 +339,14 @@ class F1ForMultitask(tfa.metrics.F1Score):
         super().__init__(num_classes-1, average, threshold, name=name, dtype=dtype)
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-        print(classification_report(y_true.numpy().flatten(), y_pred.numpy()[:,2:].argmax(1)+2, labels=[2,3,4]))
-        print(y_true.numpy().shape)
-        print(y_true.numpy()[:20])
-        print(y_pred.numpy()[:,2:].argmax(1).shape)
-        print((y_pred.numpy()[:,2:].argmax(1)+2)[:20])
+        false_idxs = np.concatenate((np.where(y_true.numpy().flatten() == 0)[0], np.where(y_true.numpy().flatten() == 1)[0]))
+        _true = np.delete(y_true.numpy().flatten(), false_idxs)
+        _pred = np.delete(y_pred.numpy()[:,2:].argmax(1)+2, false_idxs)
+        print(classification_report(_true, _pred, labels=[2,3,4]))
+        print(_true.shape)
+        print(_true[:20])
+        print(_pred.shape)
+        print(_pred[:20])
         # skip to count samples with label __unknown__
         mask = K.cast(K.not_equal(y_true, 1), K.floatx())
         if self.threshold is None:
