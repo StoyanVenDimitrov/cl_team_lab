@@ -3,6 +3,9 @@ import os
 import json
 import tensorflow_datasets as tfds
 import tensorflow as tf
+from nltk.stem import WordNetLemmatizer
+import random
+import spacy
 
 
 class SciciteReader:
@@ -31,13 +34,20 @@ class SciciteReader:
     ... 91412
     """
 
-    def __init__(self, data_dir):
-        self.data_dir = data_dir
+    def __init__(self, config):
+        self.config = config
+        self.data_dir = config["data_dir"]
         self.vocab_set = set()
         self.section_set = set()
         self.worthiness_set = set()
         self.labels_set = set()
         self.tokenizer = tfds.features.text.Tokenizer()
+        self.lemmatize = config["lemmatize"]
+        self.lowercase = config["lowercase"]
+        self.balance_dataset = config["balance_dataset"]
+
+        if self.lemmatize:
+            self.nlp = spacy.load("en_core_sci_lg")
 
     def load_tdt(self):
         """
@@ -56,15 +66,63 @@ class SciciteReader:
                 tdt.append(data)
         return tdt
 
-    def load_main_task_data(self, dev=False):
+    def lemmatize_sentence(self, sentence):
+        doc = self.nlp(sentence)
+
+        lemmas = []
+
+        for token in doc:
+            lemmas.append(token.lemma_)
+
+        return " ".join(lemmas)
+
+    def preprocess_data(self, data, lemmatize=False, lowercase=False):
+        if not lemmatize and not lowercase:
+            return data
+
+        for instance in data:
+            sentence = instance["string"]
+            if lemmatize:
+                sentence = self.lemmatize_sentence(instance["string"])
+            if lowercase:
+                sentence.lower()
+
+    def balance_data(self, dataset):
+        class_background = [t for t in dataset if t["label"] == "background"]
+        class_method = [t for t in dataset if t["label"] == "method"]
+        class_result = [t for t in dataset if t["label"] == "result"]
+
+        sample_size = min(len(class_background), len(class_method), len(class_result))
+
+        bclass0 = random.sample(class_background, sample_size)
+        bclass1 = random.sample(class_method, sample_size)
+        bclass2 = random.sample(class_result, sample_size)
+
+        bdataset = bclass0 + bclass1 + bclass2
+        random.shuffle(bdataset)
+
+        return bdataset
+
+    def load_main_task_data(self, _type):
         """Loads train data for main task"""
-        if dev:
+        if _type == "dev":
             file = os.path.join(self.data_dir, "dev.jsonl")
-        else:
+        elif _type == "train":
+            file = os.path.join(self.data_dir, "train.jsonl")
+        elif _type == "test":
             file = os.path.join(self.data_dir, "train.jsonl")
 
         with open(file, "r") as data_file:
             data = [json.loads(x) for x in list(data_file)]
+
+        if _type in ["dev", "train"]:
+            # lemmatize and lowercase data
+            data = self.preprocess_data(data, lemmatize=self.lemmatize, lowercase=self.lowercase)
+
+            # balance data
+            if self.balance_dataset:
+                data = self.balance_dataset(data)
+
         for sample in data:
             tokens = self.tokenizer.tokenize(sample["string"])
             self.vocab_set.update(tokens)
@@ -74,7 +132,7 @@ class SciciteReader:
             # sample["text"] = [sample["string"]]
         return data
 
-    def load_scaffold(self, scaffold):
+    def load_scaffold(self, scaffold, _type):
         """
         Loads scaffold data.
         :param scaffold: string, choose from {'cite', 'title'}
@@ -128,12 +186,22 @@ class SciciteReader:
             for i in self.load_main_task_data(dev=for_validation):
                 data.append(i)
 
-
         for sample in data:
+            _text = ""
             if "text" in sample.keys():
-                text.append(sample['text'])
+                _text = sample['text']
+                # text.append(sample['text'])
             elif "string" in sample.keys():
-                text.append(sample['string'])
+                _text = sample['string']
+                # text.append(sample['string'])
+
+            if self.lemmatize:
+                pass
+
+            if self.lowercase:
+                _text = _text.lower()
+
+            text.append(_text)
             not_encoded_tokens.append(sample["tokens"])
 
             relevant_key = sample["relevant_key"]
@@ -154,6 +222,9 @@ class SciciteReader:
                     worthiness.append(sample["is_citation"])
                 else:
                     worthiness.append("__unknown__")
+
+        if self.balance_dataset:
+            pass
 
         return text, labels, sections, worthiness
 
