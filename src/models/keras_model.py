@@ -3,6 +3,7 @@ import tensorflow as tf
 from src.models.model import Model
 from tensorflow.keras import backend as K
 import tensorflow_addons as tfa
+from sklearn.metrics import classification_report
 
 from src import evaluation
 
@@ -19,15 +20,17 @@ class MultitaskLearner(Model):
         # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
         self.rnn_units = int(config["rnn_units"])
-        self.atention_size = 2 * self.rnn_units
+        self.attention_size = 2 * self.rnn_units
         self.batch_size = int(config['batch_size'])
         self.number_of_epochs = int(config['number_of_epochs'])
         self.mask_value = 1  # for masking missing label
-        self.validation_step = 20
+        self.use_attention = True if config["use_attention"] == "True" else False
+        self.validation_step = int(config['validation_step'])
 
     def create_model(
         self, vocab_size, labels_size, section_size, worthiness_size
     ):
+        print("Creating model...")
         text_input_layer = tf.keras.Input(
             shape=(None,), dtype=tf.int32, name="Input_1"
         )
@@ -47,8 +50,10 @@ class MultitaskLearner(Model):
         )(
             input_embedding
         )
-        # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-        state_h = WeirdAttention(self.atention_size)(output)
+        if self.use_attention:
+            state_h = WeirdAttention(self.attention_size)(output)
+        else:
+            state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
             state_h
         )
@@ -58,7 +63,6 @@ class MultitaskLearner(Model):
         worthiness_output = tf.keras.layers.Dense(worthiness_size+1, activation="softmax")(
             state_h
         )
-
 
         self.model = tf.keras.Model(
             inputs=text_input_layer, outputs=[label_output, section_output, worthiness_output]
@@ -87,19 +91,21 @@ class MultitaskLearner(Model):
         )
 
     def fit_model(self, dataset, val_dataset):
+        print("Fitting model...")
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         # val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
         val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
+        self.model.run_eagerly = True  # solves problem of converting tensor to numpy array https://github.com/tensorflow/tensorflow/issues/27519
         self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
             callbacks=[ValidateAfter(val_dataset, self.validation_step)]
         )
 
-
     def prepare_data(self, data):
         """tokenize and encode for text, label, section... """
+        print("Preparing data...")
         component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
 
         filtered_data = list(filter('__unknown__'.__ne__, data))
@@ -120,6 +126,7 @@ class MultitaskLearner(Model):
         return tensor
 
     def create_dataset(self, text, labels, sections, worthiness):
+        print("Creating dataset...")
         dataset = tf.data.Dataset.from_tensor_slices(
             (
                 text,
@@ -143,6 +150,9 @@ class MultitaskLearner(Model):
         )
         return dataset
 
+    def save_model(self, path):
+        self.model.save(path)
+
 
 class SingletaskLearner(Model):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
@@ -152,15 +162,17 @@ class SingletaskLearner(Model):
         # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
         self.rnn_units = int(config["rnn_units"])
-        self.atention_size = 2 * self.rnn_units
+        self.attention_size = 2 * self.rnn_units
         self.batch_size = int(config['batch_size'])
         self.number_of_epochs = int(config['number_of_epochs'])
         self.mask_value = 1  # for masking missing label
-        self.validation_step = 20
+        self.use_attention = True if config["use_attention"] == "True" else False
+        self.validation_step = int(config['validation_step'])
 
     def create_model(
         self, vocab_size, labels_size
     ):
+        print("Creating model...")
         text_input_layer = tf.keras.Input(
             shape=(None,), dtype=tf.int32, name="Input_1"
         )
@@ -180,8 +192,10 @@ class SingletaskLearner(Model):
         )(
             input_embedding
         )
-        # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-        state_h = WeirdAttention(self.atention_size)(output)
+        if self.use_attention:
+            state_h = WeirdAttention(self.attention_size)(output)
+        else:
+            state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
             state_h
         )
@@ -208,9 +222,11 @@ class SingletaskLearner(Model):
         )
 
     def fit_model(self, dataset, val_dataset):
+        print("Fitting model...")
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
+        self.model.run_eagerly = True  # solves problem of converting tensor to numpy array https://github.com/tensorflow/tensorflow/issues/27519
         self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
@@ -219,6 +235,7 @@ class SingletaskLearner(Model):
 
     def prepare_data(self, data):
         """tokenize and encode for text, label, section... """
+        print("Preparing data...")
         component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
 
         filtered_data = list(filter('__unknown__'.__ne__, data))
@@ -239,6 +256,7 @@ class SingletaskLearner(Model):
         return tensor
 
     def create_dataset(self, text, labels):
+        print("Creating dataset...")
         dataset = tf.data.Dataset.from_tensor_slices(
             (
                 text,
@@ -259,6 +277,9 @@ class SingletaskLearner(Model):
             )
         )
         return dataset
+
+    def save_model(self, path):
+        self.model.save(path)
 
 
 class WeirdAttention(tf.keras.layers.Layer):
@@ -302,6 +323,9 @@ class F1ForMultitask(tfa.metrics.F1Score):
         super().__init__(num_classes-1, average, threshold, name=name, dtype=dtype)
 
     def update_state(self, y_true, y_pred, sample_weight=None):
+        # print(classification_report(y_true.numpy(), y_pred.numpy(), labels=[2,3,4]))
+        # print(y_true.numpy()[:20])
+        # print(y_pred.numpy()[:20])
         # skip to count samples with label __unknown__
         # mask = K.cast(K.not_equal(y_true, 1), K.floatx())
         if self.threshold is None:

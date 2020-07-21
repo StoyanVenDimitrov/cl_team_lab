@@ -36,15 +36,15 @@ class SciciteReader:
 
     def __init__(self, config):
         self.config = config
-        self.data_dir = config["data_dir"]
+        self.data_dir = config["dataset"]
         self.vocab_set = set()
         self.section_set = set()
         self.worthiness_set = set()
         self.labels_set = set()
         self.tokenizer = tfds.features.text.Tokenizer()
-        self.lemmatize = config["lemmatize"]
-        self.lowercase = config["lowercase"]
-        self.balance_dataset = config["balance_dataset"]
+        self.lemmatize = True if config["lemmatize"] == "True" else False
+        self.lowercase = True if config["lowercase"] == "True" else False
+        self.do_balance_dataset = True if config["balance_dataset"] == "True" else False
 
         if self.lemmatize:
             self.nlp = spacy.load("en_core_sci_lg")
@@ -87,7 +87,7 @@ class SciciteReader:
             if lowercase:
                 sentence.lower()
 
-    def balance_data(self, dataset):
+    def balance_dataset(self, dataset):
         class_background = [t for t in dataset if t["label"] == "background"]
         class_method = [t for t in dataset if t["label"] == "method"]
         class_result = [t for t in dataset if t["label"] == "result"]
@@ -117,14 +117,23 @@ class SciciteReader:
 
         if _type in ["dev", "train"]:
             # lemmatize and lowercase data
-            data = self.preprocess_data(data, lemmatize=self.lemmatize, lowercase=self.lowercase)
+            if self.lemmatize:
+                if "lemmatized_string" in data[0]:
+                    data = self.preprocess_data(data, lowercase=self.lowercase)
+                else:
+                    data = self.preprocess_data(data, lemmatize=self.lemmatize, lowercase=self.lowercase)
 
             # balance data
-            if self.balance_dataset:
+            if self.do_balance_dataset:
                 data = self.balance_dataset(data)
 
+        if self.lemmatize:
+            key = "lemmatized_string"
+        else:
+            key = "string"
+
         for sample in data:
-            tokens = self.tokenizer.tokenize(sample["string"])
+            tokens = self.tokenizer.tokenize(sample[key])
             self.vocab_set.update(tokens)
             sample["tokens"] = tokens
             #self.labels_set.update([sample["label"]])
@@ -132,7 +141,7 @@ class SciciteReader:
             # sample["text"] = [sample["string"]]
         return data
 
-    def load_scaffold(self, scaffold, _type):
+    def load_scaffold(self, scaffold):
         """
         Loads scaffold data.
         :param scaffold: string, choose from {'cite', 'title'}
@@ -163,7 +172,8 @@ class SciciteReader:
             sample["tokens"] = tokens
         return data
 
-    def load_data(self, for_validation=False, multitask=False):
+    def load_data(self, _type, multitask=False):
+        print("Loading data...")
 
         data = []
 
@@ -175,7 +185,7 @@ class SciciteReader:
 
         if multitask:
             for i, j, k in zip(
-                self.load_main_task_data(),
+                self.load_main_task_data(_type=_type),
                 self.load_scaffold("cite"),
                 self.load_scaffold("title"),
             ):
@@ -183,7 +193,7 @@ class SciciteReader:
                 data.append(j)
                 data.append(k)
         else:
-            for i in self.load_main_task_data(dev=for_validation):
+            for i in self.load_main_task_data(_type=_type):
                 data.append(i)
 
         for sample in data:

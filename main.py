@@ -14,10 +14,10 @@ config.read("configs/default.conf")
 
 
 def keras_multitask():
-    reader = SciciteReader(config["trainer"]["dataset"])
-    text, labels, sections, worthiness = reader.load_data(multitask=True)
+    reader = SciciteReader(config["preprocessor"])
+    text, labels, sections, worthiness = reader.load_data(_type="train", multitask=True)
 
-    text_dev, labels_dev, _, _ = reader.load_data(multitask=False, for_validation=True)
+    text_dev, labels_dev, _, _ = reader.load_data(_type="dev", multitask=False)
     keras_model = MultitaskLearner(
         config["multitask_trainer"]
     )
@@ -50,12 +50,17 @@ def keras_multitask():
     )
     keras_model.fit_model(dataset, dev_dataset)
 
+    # save model
+    path = None  # TODO generate model save path
+    if path:
+        keras_model.save_model(path)
+
 
 def keras_singletask():
-    reader = SciciteReader(config["trainer"]["dataset"])
-    text, labels, _, _ = reader.load_data(multitask=False)
+    reader = SciciteReader(config["preprocessor"])
+    text, labels, _, _ = reader.load_data(_type="train", multitask=False)
 
-    text_dev, labels_dev, _, _ = reader.load_data(multitask=False, for_validation=True)
+    text_dev, labels_dev, _, _ = reader.load_data(_type="dev", multitask=False)
     keras_model = SingletaskLearner(
         config["singletask_trainer"]
     )
@@ -82,9 +87,26 @@ def keras_singletask():
     )
     keras_model.fit_model(dataset, dev_dataset)
 
+    # save model
+    path = None  # TODO generate model save path
+    if path:
+        print("Saving model...")
+        keras_model.save_model(path)
+
+    # # evaluate on test set
+    # text_test, labels_test, _, _ = reader.load_data(_type="test", multitask=False)
+    #
+    # text_tensor_dev = keras_model.prepare_dev_data(text_test, text_tokenizer)
+    # labels_tensor_dev = keras_model.prepare_dev_data(labels_test, labels_tokenizer)
+    #
+    # keras_model.evaluate(text_tensor_dev, labels_tensor_dev)
+
 
 if __name__ == "__main__":
+    print("Starting...")
     keras_multitask()
+    # TODO save model
+    # TODO evaluate on test set
     # parser = argparse.ArgumentParser()
     #
     # parser.add_argument(
