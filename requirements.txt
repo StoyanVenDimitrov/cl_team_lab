@@ -5,3 +5,5 @@ pandas-compat==0.1.1
 xai==0.0.5
 jsonlines==1.2.0
 tqdm==4.46.0
+https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.2.5/en_core_sci_lg-0.2.5.tar.gz
+
