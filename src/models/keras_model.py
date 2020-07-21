@@ -94,7 +94,7 @@ class MultitaskLearner(Model):
     def fit_model(self, dataset, val_dataset):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         #val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
-        val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
+        val_dataset = val_dataset.padded_batch(5, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
         self.our_model.fit(
             dataset,
@@ -349,8 +349,9 @@ class ValidateAfter(tf.keras.callbacks.Callback):
         self.val_step = val_step
 
     def on_train_batch_end(self, batch, logs=None):
-        if batch > 1 and batch % self.val_step == 0:
-            self.model.evaluate(self.val_data[0], verbose=1)
+        # if batch > 1 and batch % self.val_step == 0:
+        #     self.model.evaluate(self.val_data[0], verbose=1)
+        self.model.evaluate(self.val_data[0], verbose=1)
 
 
 class F1ForMultitask(tfa.metrics.F1Score):
@@ -366,7 +367,7 @@ class F1ForMultitask(tfa.metrics.F1Score):
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         # skip to count samples with label __unknown__
-        # mask = K.cast(K.not_equal(y_true, 1), K.floatx())
+        mask = K.cast(K.not_equal(y_true, 1), K.floatx())
         if self.threshold is None:
             threshold = tf.reduce_max(y_pred, axis=-1, keepdims=True)
             # make sure [0, 0, 0] doesn't become [1, 1, 1]
@@ -384,8 +385,8 @@ class F1ForMultitask(tfa.metrics.F1Score):
         def _weighted_sum(val, sample_weight):
             if sample_weight is not None:
                 val = tf.math.multiply(val, tf.expand_dims(sample_weight, 1))
-            # return tf.reduce_sum(val*mask, axis=self.axis)
-            return tf.reduce_sum(val, axis=self.axis)[2:]
+            return tf.reduce_sum(val*mask, axis=self.axis)[2:]
+            # return tf.reduce_sum(val, axis=self.axis)
         self.true_positives.assign_add(_weighted_sum(y_pred * y_true, sample_weight))
         self.false_positives.assign_add(
             _weighted_sum(y_pred * (1 - y_true), sample_weight)
