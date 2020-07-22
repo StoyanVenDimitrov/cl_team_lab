@@ -12,7 +12,7 @@ from src import evaluation
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
 BUFFER_SIZE = 11000
-bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/2",
+bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
                             trainable=True)
 FullTokenizer = bert.bert_tokenization.FullTokenizer
 max_seq_length = 100  # Your choice here.
@@ -31,10 +31,13 @@ class MultitaskLearner(Model):
         self.number_of_epochs = int(config['number_of_epochs'])
         self.validation_step = int(config['validation_step'])
         self.mask_value = 1  # for masking missing label
+        self.worthiness_weight = float(config['worthiness_weight'])
+        self.section_weight = float(config['section_weight'])
 
     def create_model(
         self, labels_size, section_size, worthiness_size
     ):
+        self.labels_size, self.section_size, self.worthiness_size = labels_size+1, section_size+1, worthiness_size+1
         input_word_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
                                                name="input_word_ids")
         input_mask = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
@@ -55,13 +58,13 @@ class MultitaskLearner(Model):
         )
         # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
         state_h = WeirdAttention(self.atention_size)(output)
-        label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
+        label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax", name='dense')(
             state_h
         )
-        section_output = tf.keras.layers.Dense(section_size+1, activation="softmax")(
+        section_output = tf.keras.layers.Dense(section_size+1, activation="softmax", name='dense_1')(
             state_h
         )
-        worthiness_output = tf.keras.layers.Dense(worthiness_size+1, activation="softmax")(
+        worthiness_output = tf.keras.layers.Dense(worthiness_size+1, activation="softmax", name='dense_2')(
             state_h
         )
 
@@ -78,6 +81,11 @@ class MultitaskLearner(Model):
         def masked_loss_function(y_true, y_pred):
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
             y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
+            # compare y_v len to find out the current type of labels and output the loss coeff or 1:
+            section_loss_weight = K.switch(K.equal(y_v.shape[1], self.section_size), self.section_weight, 1.0)
+            worthiness_loss_weight = K.switch(K.equal(y_v.shape[1], self.worthiness_size), self.worthiness_weight, 1.0)
+            # update the mask to scale with the needed factor:
+            mask = mask * section_loss_weight * worthiness_loss_weight
             return K.categorical_crossentropy(
                 y_v * mask,
                 K.clip(y_pred * mask, min_value=1e-15, max_value=1e10)
@@ -96,6 +104,12 @@ class MultitaskLearner(Model):
         #val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
         val_dataset = val_dataset.padded_batch(5, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
+        # class_weight = {
+        #             'dense': {label: 1 for label in range(self.labels_size)},
+        #             'dense_1': {section: self.section_weight for section in range(self.section_size)},
+        #             'dense_2': {worth: self.worthiness_weight for worth in range(self.worthiness_size)}
+        #         }
+
         self.our_model.fit(
             dataset,
             epochs=self.number_of_epochs,
@@ -349,9 +363,8 @@ class ValidateAfter(tf.keras.callbacks.Callback):
         self.val_step = val_step
 
     def on_train_batch_end(self, batch, logs=None):
-        # if batch > 1 and batch % self.val_step == 0:
-        #     self.model.evaluate(self.val_data[0], verbose=1)
-        self.model.evaluate(self.val_data[0], verbose=1)
+        if batch > 1 and batch % self.val_step == 0:
+            self.model.evaluate(self.val_data[0], verbose=1)
 
 
 class F1ForMultitask(tfa.metrics.F1Score):
