@@ -45,19 +45,19 @@ class MultitaskLearner(Model):
         segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
                                             name="segment_ids")
         pooled_output, sequence_output = bert_layer([input_word_ids, input_mask, segment_ids])
-        output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
-            tf.keras.layers.LSTM(
-                self.rnn_units,
-                stateful=False,
-                return_sequences=True,
-                return_state=True,
-                recurrent_initializer="glorot_uniform",
-            )
-        )(
-            sequence_output
-        )
+        # output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
+        #     tf.keras.layers.LSTM(
+        #         self.rnn_units,
+        #         stateful=False,
+        #         return_sequences=True,
+        #         return_state=True,
+        #         recurrent_initializer="glorot_uniform",
+        #     )
+        # )(
+        #     sequence_output
+        # )
         # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-        state_h = WeirdAttention(self.atention_size)(output)
+        state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax", name='dense')(
             state_h
         )
