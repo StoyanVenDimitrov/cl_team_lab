@@ -38,13 +38,19 @@ class MultitaskLearner(Model):
         self.max_seq_len = int(config["max_len"])
         self.use_attention = True if config["use_attention"] == "True" else False
         self.validation_step = int(config['validation_step'])
+        self.worthiness_weight = float(config['worthiness_weight'])
+        self.section_weight = float(config['section_weight'])
         
         self.logdir = utils.make_logdir(pre_config, config)
         self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
 
+        checkpoint_path = os.path.join(self.logdir, os.pardir, "checkpoints/cp-{epoch:04d}.ckpt")
+        self.checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, verbose=1, save_weights_only=True, period=5)
+
     def create_model(
         self, vocab_size, labels_size, section_size, worthiness_size
     ):
+        self.labels_size, self.section_size, self.worthiness_size = labels_size+1, section_size+1, worthiness_size+1
         text_input_layer = tf.keras.Input(
             shape=(None,), dtype=tf.int32, name="Input_1"
         )
@@ -68,13 +74,13 @@ class MultitaskLearner(Model):
             state_h = WeirdAttention(self.attention_size)(output)
         else:
             state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-        label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
+        label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax", name="dense")(
             state_h
         )
-        section_output = tf.keras.layers.Dense(section_size+1, activation="softmax")(
+        section_output = tf.keras.layers.Dense(section_size+1, activation="softmax", name="dense_1")(
             state_h
         )
-        worthiness_output = tf.keras.layers.Dense(worthiness_size+1, activation="softmax")(
+        worthiness_output = tf.keras.layers.Dense(worthiness_size+1, activation="softmax", name="dense_2")(
             state_h
         )
 
@@ -88,9 +94,22 @@ class MultitaskLearner(Model):
         )
         # for the loss object: https://www.dlology.com/blog/how-to-multi-task-learning-with-missing-labels-in-keras/
 
+        def _masked_loss_function(y_true, y_pred):
+            mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
+            y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
+            return K.categorical_crossentropy(
+                y_v * mask,
+                K.clip(y_pred * mask, min_value=1e-15, max_value=1e10)
+            )
+
         def masked_loss_function(y_true, y_pred):
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
             y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
+            # compare y_v len to find out the current type of labels and output the loss coeff or 1:
+            section_loss_weight = K.switch(K.equal(y_v.shape[1], self.section_size), self.section_weight, 1.0)
+            worthiness_loss_weight = K.switch(K.equal(y_v.shape[1], self.worthiness_size), self.worthiness_weight, 1.0)
+            # update the mask to scale with the needed factor:
+            mask = mask * section_loss_weight * worthiness_loss_weight
             return K.categorical_crossentropy(
                 y_v * mask,
                 K.clip(y_pred * mask, min_value=1e-15, max_value=1e10)
@@ -113,12 +132,11 @@ class MultitaskLearner(Model):
         self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
-            callbacks=[ValidateAfter(val_dataset, self.validation_step), self.tensorboard_callback]
+            callbacks=[ValidateAfter(val_dataset, self.validation_step), self.tensorboard_callback, self.checkpoint_callback]
         )
 
     def evaluate(self, dataset, return_dict=False):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
-        self.model.run_eagerly = True
         return self.model.evaluate(dataset, return_dict=return_dict, verbose=1, callbacks=[self.tensorboard_callback])
 
     def prepare_data(self, data, max_len=None):
@@ -172,8 +190,9 @@ class MultitaskLearner(Model):
         )
         return dataset
 
+    # TODO model.save throws error https://github.com/tensorflow/tensorflow/issues/26811
     def save_model(self):
-        path = os.path.join(self.logdir, "model")
+        path = os.path.join(self.logdir, "model.h5")
         print("Saving model to path:", path)
         # self.model.save(path)
         self.model.save_weights(path)
@@ -195,9 +214,14 @@ class SingletaskLearner(Model):
         self.mask_value = 1  # for masking missing label
         self.use_attention = True if config["use_attention"] == "True" else False
         self.validation_step = int(config['validation_step'])
+        self.worthiness_weight = float(config['worthiness_weight'])
+        self.section_weight = float(config['section_weight'])
 
         self.logdir = utils.make_logdir(pre_config, config)
         self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
+
+        checkpoint_path = os.path.join(self.logdir, os.pardir, "checkpoints/cp-{epoch:04d}.ckpt")
+        self.checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, verbose=1, save_weights_only=True, period=5)
 
     def create_model(
         self, vocab_size, labels_size
@@ -259,12 +283,11 @@ class SingletaskLearner(Model):
         self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
-            callbacks=[ValidateAfter(val_dataset, self.validation_step), self.tensorboard_callback]
+            callbacks=[ValidateAfter(val_dataset, self.validation_step), self.tensorboard_callback, self.checkpoint_callback]
         )
 
     def evaluate(self, dataset, return_dict=False):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
-        self.model.run_eagerly = True
         return self.model.evaluate(dataset, return_dict=return_dict, verbose=1, callbacks=[self.tensorboard_callback])
 
     def prepare_data(self, data, max_len=None):
@@ -316,8 +339,9 @@ class SingletaskLearner(Model):
         )
         return dataset
 
+    # TODO model.save throws error https://github.com/tensorflow/tensorflow/issues/26811
     def save_model(self):
-        path = os.path.join(self.logdir, "model")
+        path = os.path.join(self.logdir, "model.h5")
         print("Saving model to path:", path)
         # self.model.save(path)
         self.model.save_weights(path)
@@ -328,9 +352,15 @@ class WeirdAttention(tf.keras.layers.Layer):
     def __init__(self, units):
         super(WeirdAttention, self).__init__()
         self.units = units
+        # self.w = self.add_weight(shape=(self.units, 1),
+        #                          initializer='random_normal',
+        #                          trainable=True)
+
+    def build(self, input_shape):
         self.w = self.add_weight(shape=(self.units, 1),
                                  initializer='random_normal',
-                                 trainable=True)
+                                 trainable=True,
+                                 name="w")
 
     # TODO: strictly, self.w should be added in the build():
     # https://www.tensorflow.org/guide/keras/custom_layers_and_models#best_practice_deferring_weight_creation_until_the_shape_of_the_inputs_is_known

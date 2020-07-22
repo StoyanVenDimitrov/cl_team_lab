@@ -139,8 +139,8 @@ class SciciteReader:
             #self.labels_set.update([sample["label"]])
             sample["relevant_key"] = "label"
             # sample["text"] = [sample["string"]]
-        return data
-        # return data[:100]  # TODO remove
+        # return data
+        return data[:100]  # TODO remove
 
     def load_scaffold(self, scaffold):
         """

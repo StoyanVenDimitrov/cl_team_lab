@@ -72,25 +72,25 @@ class Trainer:
         keras_model.create_model(
             vocab_size, labels_size, section_size, worthiness_size
         )
-        print("Fitting model...")
-        keras_model.fit_model(dataset, dev_dataset)
+        # print("Fitting model...")
+        # keras_model.fit_model(dataset, dev_dataset)
 
-        # save model
-        # print("Saving model...")
-        # file_name_config = utils.make_filename(config["preprocessor"])
-        # file_name_model = utils.make_filename(config["multitask_trainer"])
         # # save model
-        # path = os.path.join("saved_models", file_name_config+"_"+file_name_model)
+        # # print("Saving model...")
+        # # file_name_config = utils.make_filename(config["preprocessor"])
+        # # file_name_model = utils.make_filename(config["multitask_trainer"])
+        # # # save model
+        # # path = os.path.join("saved_models", file_name_config+"_"+file_name_model)
         # keras_model.save_model()
 
-        # Evaluate
-        print("Evaluating...")
-        outputs = keras_model.evaluate(test_dataset, return_dict=False)
-        # print(outputs)
+        # # Evaluate
+        # print("Evaluating...")
+        # outputs = keras_model.evaluate(test_dataset, return_dict=False)
+        # # print(outputs)
             
-        end_time = time.time()
-        total_time = end_time - start_time
-        print("Execution time:", str(datetime.timedelta(seconds=total_time)))
+        # end_time = time.time()
+        # total_time = end_time - start_time
+        # print("Execution time:", str(datetime.timedelta(seconds=total_time)))
 
 
     def keras_singletask(self, args):
@@ -142,25 +142,25 @@ class Trainer:
         keras_model.create_model(
             vocab_size, labels_size
         )
-        print("Fitting model...")
-        keras_model.fit_model(dataset, dev_dataset)
+        # print("Fitting model...")
+        # keras_model.fit_model(dataset, dev_dataset)
 
-        # save model
-        # print("Saving model...")
-        # file_name_config = utils.make_filename(config["preprocessor"])
-        # file_name_model = utils.make_filename(config["singletask_trainer"])
         # # save model
-        # path = os.path.join("saved_models", file_name_config+"_"+file_name_model)
-        # keras_model.save_model()
+        # # print("Saving model...")
+        # # file_name_config = utils.make_filename(config["preprocessor"])
+        # # file_name_model = utils.make_filename(config["singletask_trainer"])
+        # # # save model
+        # # path = os.path.join("saved_models", file_name_config+"_"+file_name_model)
+        # # keras_model.save_model()
 
-        # Evaluate
-        print("Evaluating...")
-        outputs = keras_model.evaluate(test_dataset, return_dict=False)
-        # print(outputs)
+        # # Evaluate
+        # print("Evaluating...")
+        # outputs = keras_model.evaluate(test_dataset, return_dict=False)
+        # # print(outputs)
 
-        end_time = time.time()
-        total_time = end_time - start_time
-        print("Execution time:", str(datetime.timedelta(seconds=total_time)))
+        # end_time = time.time()
+        # total_time = end_time - start_time
+        # print("Execution time:", str(datetime.timedelta(seconds=total_time)))
 
 
 def run(args, config):
@@ -209,17 +209,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         required=False,
-        default=False,
+        default="configs/default.conf",
         help="Set to True if metrics should me logged with mlflow, else set to False.",
     )
     
     args = parser.parse_args()
 
     config = configparser.ConfigParser()
-    if args.config:
-        config.read(args.config)
-    else:
-        config.read("configs/default.conf ...")
+    # if args.config:
+    config.read(args.config)
+    # else:
+    #     config.read("configs/default.conf")
     
     print("Loading configuration from", args.config)
 
