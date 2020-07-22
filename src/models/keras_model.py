@@ -1,11 +1,17 @@
 """NN model implementation with keras"""
+import warnings
+import os
+warnings.filterwarnings('ignore',category=FutureWarning)    # ignores warnings about future version of numpy
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 import tensorflow as tf
+from tensorflow.python.util import deprecation
+deprecation._PRINT_DEPRECATION_WARNINGS = False
 from src.models.model import Model
 from tensorflow.keras import backend as K
 import tensorflow_addons as tfa
 from sklearn.metrics import classification_report
 import numpy as np
-from tqdm.keras import TqdmCallback
 
 from src import evaluation
 from src.utils import utils
@@ -39,7 +45,6 @@ class MultitaskLearner(Model):
     def create_model(
         self, vocab_size, labels_size, section_size, worthiness_size
     ):
-        print("Creating model...")
         text_input_layer = tf.keras.Input(
             shape=(None,), dtype=tf.int32, name="Input_1"
         )
@@ -100,9 +105,6 @@ class MultitaskLearner(Model):
         )
 
     def fit_model(self, dataset, val_dataset):
-        print("Fitting model...")
-        print(dataset)
-        print(val_dataset)
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         # val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
         val_dataset = val_dataset.padded_batch(5, drop_remainder=True)
@@ -111,12 +113,16 @@ class MultitaskLearner(Model):
         self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
-            callbacks=[ValidateAfter(val_dataset, self.validation_step), self.tensorboard_callback, TqdmCallback(verbose=2)]
+            callbacks=[ValidateAfter(val_dataset, self.validation_step), self.tensorboard_callback]
         )
+
+    def evaluate(self, dataset, return_dict=False):
+        dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
+        self.model.run_eagerly = True
+        return self.model.evaluate(dataset, return_dict=return_dict, verbose=1, callbacks=[self.tensorboard_callback])
 
     def prepare_data(self, data, max_len=None):
         """tokenize and encode for text, label, section... """
-        print("Preparing data...")
         component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
 
         filtered_data = list(filter('__unknown__'.__ne__, data))
@@ -143,7 +149,6 @@ class MultitaskLearner(Model):
         return tensor
 
     def create_dataset(self, text, labels, sections, worthiness):
-        print("Creating dataset...")
         dataset = tf.data.Dataset.from_tensor_slices(
             (
                 text,
@@ -169,7 +174,9 @@ class MultitaskLearner(Model):
 
     def save_model(self):
         path = os.path.join(self.logdir, "model")
-        self.model.save(path)
+        print("Saving model to path:", path)
+        # self.model.save(path)
+        self.model.save_weights(path)
 
 
 class SingletaskLearner(Model):
@@ -195,7 +202,6 @@ class SingletaskLearner(Model):
     def create_model(
         self, vocab_size, labels_size
     ):
-        print("Creating model...")
         text_input_layer = tf.keras.Input(
             shape=(None,), dtype=tf.int32, name="Input_1"
         )
@@ -246,7 +252,6 @@ class SingletaskLearner(Model):
         )
 
     def fit_model(self, dataset, val_dataset):
-        print("Fitting model...")
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
@@ -254,12 +259,16 @@ class SingletaskLearner(Model):
         self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
-            callbacks=[ValidateAfter(val_dataset, self.validation_step), self.tensorboard_callback, TqdmCallback(verbose=2)]
+            callbacks=[ValidateAfter(val_dataset, self.validation_step), self.tensorboard_callback]
         )
+
+    def evaluate(self, dataset, return_dict=False):
+        dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
+        self.model.run_eagerly = True
+        return self.model.evaluate(dataset, return_dict=return_dict, verbose=1, callbacks=[self.tensorboard_callback])
 
     def prepare_data(self, data, max_len=None):
         """tokenize and encode for text, label, section... """
-        print("Preparing data...")
         component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
 
         filtered_data = list(filter('__unknown__'.__ne__, data))
@@ -286,7 +295,6 @@ class SingletaskLearner(Model):
         return tensor
 
     def create_dataset(self, text, labels):
-        print("Creating dataset...")
         dataset = tf.data.Dataset.from_tensor_slices(
             (
                 text,
@@ -310,7 +318,9 @@ class SingletaskLearner(Model):
 
     def save_model(self):
         path = os.path.join(self.logdir, "model")
-        self.model.save(path)
+        print("Saving model to path:", path)
+        # self.model.save(path)
+        self.model.save_weights(path)
 
 
 class WeirdAttention(tf.keras.layers.Layer):

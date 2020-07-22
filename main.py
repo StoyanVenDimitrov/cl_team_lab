@@ -3,9 +3,11 @@ from src.evaluation import custom_macro_f1_score, custom_micro_f1_score
 from src.utils.reader import SciciteReader
 from src.models.keras_model import MultitaskLearner
 from src.models.keras_model import SingletaskLearner
+import tensorflow as tf
 import configparser
 import argparse
 import time
+import datetime
 
 # pylint:skip-file
 
@@ -22,12 +24,18 @@ class Trainer:
             utils.wandb_init_logs(self.config["multitask_trainer"])
 
         reader = SciciteReader(self.config["preprocessor"])
+        print("Loading data...")
         text, labels, sections, worthiness = reader.load_data(_type="train", multitask=True)
-
         text_dev, labels_dev, _, _ = reader.load_data(_type="dev", multitask=False)
         keras_model = MultitaskLearner(
             self.config
         )
+        text_test, labels_test, _, _ = reader.load_data(_type="test", multitask=False)
+        keras_model = MultitaskLearner(
+            self.config
+        )
+
+        print("Preparing data...")
         text_tensor, text_tokenizer = keras_model.prepare_data(text, max_len=int(self.config["multitask_trainer"]["max_len"]))
         labels_tensor, labels_tokenizer = keras_model.prepare_data(labels)
         sections_tensor, sections_tokenizer = keras_model.prepare_data(sections)
@@ -36,6 +44,10 @@ class Trainer:
         text_tensor_dev = keras_model.prepare_dev_data(text_dev, text_tokenizer, max_len=int(self.config["multitask_trainer"]["max_len"]))
         labels_tensor_dev = keras_model.prepare_dev_data(labels_dev, labels_tokenizer)
 
+        text_tensor_test = keras_model.prepare_dev_data(text_test, text_tokenizer, max_len=int(self.config["multitask_trainer"]["max_len"]))
+        labels_tensor_test = keras_model.prepare_dev_data(labels_test, labels_tokenizer)
+
+        print("Creating datasets...")
         dataset = keras_model.create_dataset(
             text_tensor,
             labels_tensor,
@@ -46,25 +58,35 @@ class Trainer:
             text_tensor_dev,
             labels_tensor_dev
         )
+        test_dataset = keras_model.create_dev_dataset(
+            text_tensor_test,
+            labels_tensor_test
+        )
 
         vocab_size = len(text_tokenizer.word_index.keys())
         labels_size = len(labels_tokenizer.word_index.keys())
         section_size = len(sections_tokenizer.word_index.keys())
         worthiness_size = len(worthiness_tokenizer.word_index.keys())
 
+        print("Creating model...")
         keras_model.create_model(
             vocab_size, labels_size, section_size, worthiness_size
         )
+        print("Fitting model...")
         keras_model.fit_model(dataset, dev_dataset)
 
         # save model
-        print("Saving model...")
+        # print("Saving model...")
         # file_name_config = utils.make_filename(config["preprocessor"])
         # file_name_model = utils.make_filename(config["multitask_trainer"])
         # # save model
         # path = os.path.join("saved_models", file_name_config+"_"+file_name_model)
-        if path:
-            keras_model.save_model()
+        # keras_model.save_model()
+
+        # Evaluate
+        print("Evaluating...")
+        outputs = keras_model.evaluate(test_dataset, return_dict=False)
+        # print(outputs)
             
         end_time = time.time()
         total_time = end_time - start_time
@@ -78,18 +100,28 @@ class Trainer:
             utils.wandb_init_logs(self.config["singletask_trainer"])
 
         reader = SciciteReader(self.config["preprocessor"])
+        print("Loading data...")
         text, labels, _, _ = reader.load_data(_type="train", multitask=False)
-
         text_dev, labels_dev, _, _ = reader.load_data(_type="dev", multitask=False)
         keras_model = SingletaskLearner(
             self.config
         )
+        text_test, labels_test, _, _ = reader.load_data(_type="test", multitask=False)
+        keras_model = SingletaskLearner(
+            self.config
+        )
+
+        print("Preparing data...")
         text_tensor, text_tokenizer = keras_model.prepare_data(text, max_len=int(self.config["multitask_trainer"]["max_len"]))
         labels_tensor, labels_tokenizer = keras_model.prepare_data(labels)
 
         text_tensor_dev = keras_model.prepare_dev_data(text_dev, text_tokenizer, max_len=int(self.config["multitask_trainer"]["max_len"]))
         labels_tensor_dev = keras_model.prepare_dev_data(labels_dev, labels_tokenizer)
 
+        text_tensor_test = keras_model.prepare_dev_data(text_test, text_tokenizer, max_len=int(self.config["multitask_trainer"]["max_len"]))
+        labels_tensor_test = keras_model.prepare_dev_data(labels_test, labels_tokenizer)
+
+        print("Creating datasets...")
         dataset = keras_model.create_dataset(
             text_tensor,
             labels_tensor
@@ -98,23 +130,33 @@ class Trainer:
             text_tensor_dev,
             labels_tensor_dev
         )
+        test_dataset = keras_model.create_dev_dataset(
+            text_tensor_test,
+            labels_tensor_test
+        )
 
         vocab_size = len(text_tokenizer.word_index.keys())
         labels_size = len(labels_tokenizer.word_index.keys())
 
+        print("Creating model...")
         keras_model.create_model(
             vocab_size, labels_size
         )
+        print("Fitting model...")
         keras_model.fit_model(dataset, dev_dataset)
 
         # save model
-        print("Saving model...")
+        # print("Saving model...")
         # file_name_config = utils.make_filename(config["preprocessor"])
         # file_name_model = utils.make_filename(config["singletask_trainer"])
         # # save model
         # path = os.path.join("saved_models", file_name_config+"_"+file_name_model)
-        if path:
-            keras_model.save_model()
+        # keras_model.save_model()
+
+        # Evaluate
+        print("Evaluating...")
+        outputs = keras_model.evaluate(test_dataset, return_dict=False)
+        # print(outputs)
 
         end_time = time.time()
         total_time = end_time - start_time
@@ -125,8 +167,11 @@ def run(args, config):
     if args.train:
         trainer = Trainer(args, config)
         if "multitask_trainer" in config:
+            print("Running multitask trainer...")
             trainer.keras_multitask(args)
+            tf.keras.backend.clear_session()
         if "singletask_trainer" in config:
+            print("Running singletask trainer...")
             trainer.keras_singletask(args)
 
     # # evaluate on test set
@@ -161,12 +206,23 @@ if __name__ == "__main__":
         default=False,
         help="Set to True if metrics should me logged with mlflow, else set to False.",
     )
+    parser.add_argument(
+        "--config",
+        required=False,
+        default=False,
+        help="Set to True if metrics should me logged with mlflow, else set to False.",
+    )
     
     args = parser.parse_args()
 
     config = configparser.ConfigParser()
-    config.read("configs/default.conf")
+    if args.config:
+        config.read(args.config)
+    else:
+        config.read("configs/default.conf ...")
     
+    print("Loading configuration from", args.config)
+
     run(args, config)  # main function
 
     end_time = time.time()

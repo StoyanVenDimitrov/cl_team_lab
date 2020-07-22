@@ -105,12 +105,12 @@ class SciciteReader:
 
     def load_main_task_data(self, _type):
         """Loads train data for main task"""
-        if _type == "dev":
+        if _type == "train":
+            file = os.path.join(self.data_dir, "train.jsonl")
+        elif _type == "dev":
             file = os.path.join(self.data_dir, "dev.jsonl")
-        elif _type == "train":
-            file = os.path.join(self.data_dir, "train.jsonl")
         elif _type == "test":
-            file = os.path.join(self.data_dir, "train.jsonl")
+            file = os.path.join(self.data_dir, "test.jsonl")
 
         with open(file, "r") as data_file:
             data = [json.loads(x) for x in list(data_file)]
@@ -140,6 +140,7 @@ class SciciteReader:
             sample["relevant_key"] = "label"
             # sample["text"] = [sample["string"]]
         return data
+        # return data[:100]  # TODO remove
 
     def load_scaffold(self, scaffold):
         """
@@ -173,8 +174,6 @@ class SciciteReader:
         return data
 
     def load_data(self, _type, multitask=False):
-        print("Loading data...")
-
         data = []
 
         not_encoded_tokens = []
