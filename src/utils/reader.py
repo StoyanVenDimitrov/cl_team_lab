@@ -121,7 +121,9 @@ class SciciteReader:
                 if "lemmatized_string" in data[0]:
                     data = self.preprocess_data(data, lowercase=self.lowercase)
                 else:
-                    data = self.preprocess_data(data, lemmatize=self.lemmatize, lowercase=self.lowercase)
+                    data = self.preprocess_data(
+                        data, lemmatize=self.lemmatize, lowercase=self.lowercase
+                    )
 
             # balance data
             if self.do_balance_dataset:
@@ -136,11 +138,11 @@ class SciciteReader:
             tokens = self.tokenizer.tokenize(sample[key])
             self.vocab_set.update(tokens)
             sample["tokens"] = tokens
-            #self.labels_set.update([sample["label"]])
+            # self.labels_set.update([sample["label"]])
             sample["relevant_key"] = "label"
             # sample["text"] = [sample["string"]]
-        # return data
-        return data[:100]  # TODO remove
+        return data
+        # return data[:100]  # TODO remove
 
     def load_scaffold(self, scaffold):
         """
@@ -165,7 +167,7 @@ class SciciteReader:
             if scaffold == "cite":
                 # self.worthiness_set.update([str(sample["is_citation"])])
                 sample["relevant_key"] = "is_citation"
-                sample['is_citation'] = str(sample["is_citation"])
+                sample["is_citation"] = str(sample["is_citation"])
             else:
                 sample["relevant_key"] = "section_title"
             tokens = self.tokenizer.tokenize(sample["text"])
@@ -198,10 +200,10 @@ class SciciteReader:
         for sample in data:
             _text = ""
             if "text" in sample.keys():
-                _text = sample['text']
+                _text = sample["text"]
                 # text.append(sample['text'])
             elif "string" in sample.keys():
-                _text = sample['string']
+                _text = sample["string"]
                 # text.append(sample['string'])
 
             if self.lowercase:
@@ -213,14 +215,14 @@ class SciciteReader:
             relevant_key = sample["relevant_key"]
 
             if relevant_key == "label":
-                    labels.append(sample["label"])
+                labels.append(sample["label"])
             else:
                 labels.append("__unknown__")
 
             if multitask:
                 if relevant_key == "section_title":
                     # avoid 'related work' to be tokenized with two labels
-                    sections.append(sample["section_title"].split(' ')[0])
+                    sections.append(sample["section_title"].split(" ")[0])
                 else:
                     sections.append("__unknown__")
 
@@ -242,4 +244,9 @@ class SciciteReader:
         return [d[k] for d in data]
 
     def get_dimensions(self):
-        return len(self.vocab_set), len(self.labels_set), len(self.section_set), len(self.worthiness_set)
+        return (
+            len(self.vocab_set),
+            len(self.labels_set),
+            len(self.section_set),
+            len(self.worthiness_set),
+        )

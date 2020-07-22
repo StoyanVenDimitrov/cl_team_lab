@@ -11,10 +11,10 @@ def load_config(path):
 
 
 def write_config(path, config1, config2):
-    with open(path+"config.txt", "w") as f:
+    with open(path + "config.txt", "w") as f:
         for c in [config1, config2]:
-            for k,v in c.items():
-                f.write(k+" = "+v+"\n")
+            for k, v in c.items():
+                f.write(k + " = " + v + "\n")
 
 
 def make_filename(config):
@@ -33,17 +33,20 @@ def make_filename(config):
     return filename
 
 
-def make_logdir(config1, config2):
+def make_logdir(_type, config1, config2):
     filename1 = make_filename(config1)
     filename2 = make_filename(config2)
-    
-    logdir = os.path.join("saved_models", filename1+"_"+filename2, "logs")
+
+    logdir = os.path.join(
+        "saved_models", _type + "_" + filename1 + "_" + filename2, "logs"
+    )
     if not os.path.isdir(logdir):
         os.makedirs(logdir)
 
     write_config(logdir, config1, config2)
 
     return logdir
+
 
 def import_module(dotted_path):
     module_parts = dotted_path.split(".")
@@ -74,49 +77,57 @@ def get_log_params(config):
 
 
 def wandb_init(config):
-    wandb.init(config={"epoch": int(config["epoch"]),
-                       "batch": int(config["batch"]),
-                       "max_len": int(config["max_len"]),
-                       "learning_rate": int(config["learning_rate"]),
-                       "balanced_data": True if config["balanced_data"] == "True" else False,
-                       "train_accuracy": 0.0,
-                       "train_f1": 0.0,
-                       'val_macro_avg_precision': 0.0,
-                       'val_macro_avg_recall': 0.0,
-                       'val_macro_avg_f1-score': 0.0,
-                       'val_class_0_precision': 0.0,
-                       'val_class_0_recall': 0.0,
-                       'val_class_0_f1-score': 0.0,
-                       'val_class_1_precision': 0.0,
-                       'val_class_1_recall': 0.0,
-                       'val_class_1_f1-score': 0.0,
-                       'val_class_2_precision': 0.0,
-                       'val_class_2_recall': 0.0,
-                       'val_class_2_f1-score': 0.0,
-                       'test_macro_avg_precision': 0.0,
-                       'test_macro_avg_recall': 0.0,
-                       'test_macro_avg_f1-score': 0.0,
-                       'test_class_0_precision': 0.0,
-                       'test_class_0_recall': 0.0,
-                       'test_class_0_f1-score': 0.0,
-                       'test_class_1_precision': 0.0,
-                       'test_class_1_recall': 0.0,
-                       'test_class_1_f1-score': 0.0,
-                       'test_class_2_precision': 0.0,
-                       'test_class_2_recall': 0.0,
-                       'test_class_2_f1-score': 0.0})
+    wandb.init(
+        config={
+            "epoch": int(config["epoch"]),
+            "batch": int(config["batch"]),
+            "max_len": int(config["max_len"]),
+            "learning_rate": int(config["learning_rate"]),
+            "balanced_data": True if config["balanced_data"] == "True" else False,
+            "train_accuracy": 0.0,
+            "train_f1": 0.0,
+            "val_macro_avg_precision": 0.0,
+            "val_macro_avg_recall": 0.0,
+            "val_macro_avg_f1-score": 0.0,
+            "val_class_0_precision": 0.0,
+            "val_class_0_recall": 0.0,
+            "val_class_0_f1-score": 0.0,
+            "val_class_1_precision": 0.0,
+            "val_class_1_recall": 0.0,
+            "val_class_1_f1-score": 0.0,
+            "val_class_2_precision": 0.0,
+            "val_class_2_recall": 0.0,
+            "val_class_2_f1-score": 0.0,
+            "test_macro_avg_precision": 0.0,
+            "test_macro_avg_recall": 0.0,
+            "test_macro_avg_f1-score": 0.0,
+            "test_class_0_precision": 0.0,
+            "test_class_0_recall": 0.0,
+            "test_class_0_f1-score": 0.0,
+            "test_class_1_precision": 0.0,
+            "test_class_1_recall": 0.0,
+            "test_class_1_f1-score": 0.0,
+            "test_class_2_precision": 0.0,
+            "test_class_2_recall": 0.0,
+            "test_class_2_f1-score": 0.0,
+        }
+    )
 
 
 def wandb_log_report(_type, report):
-    wandb.log({f"{_type}_macro_avg_precision": report["macro avg"]["precision"],
-               f"{_type}_macro_avg_recall": report["macro avg"]["recall"],
-               f"{_type}_macro_avg_f1-score": report["macro avg"]["f1-score"],
-               f"{_type}_class_0_precision": report["0"]["precision"],
-               f"{_type}_class_0_recall": report["0"]["recall"],
-               f"{_type}_class_0_f1-score": report["0"]["f1-score"],
-               f"{_type}_class_1_precision": report["1"]["precision"],
-               f"{_type}_class_1_recall": report["1"]["recall"],
-               f"{_type}_class_1_f1-score": report["1"]["f1-score"],
-               f"{_type}_class_2_precision": report["2"]["precision"],
-               f"{_type}_class_2_recall": report["2"]["recall"],
-               f"{_type}_class_2_f1-score": report["2"]["f1-score"]})
+    wandb.log(
+        {
+            f"{_type}_macro_avg_precision": report["macro avg"]["precision"],
+            f"{_type}_macro_avg_recall": report["macro avg"]["recall"],
+            f"{_type}_macro_avg_f1-score": report["macro avg"]["f1-score"],
+            f"{_type}_class_0_precision": report["0"]["precision"],
+            f"{_type}_class_0_recall": report["0"]["recall"],
+            f"{_type}_class_0_f1-score": report["0"]["f1-score"],
+            f"{_type}_class_1_precision": report["1"]["precision"],
+            f"{_type}_class_1_recall": report["1"]["recall"],
+            f"{_type}_class_1_f1-score": report["1"]["f1-score"],
+            f"{_type}_class_2_precision": report["2"]["precision"],
+            f"{_type}_class_2_recall": report["2"]["recall"],
+            f"{_type}_class_2_f1-score": report["2"]["f1-score"],
+        }
+    )
