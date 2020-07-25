@@ -11,7 +11,7 @@ def load_config(path):
 
 
 def write_config(path, config1, config2):
-    with open(path + "config.txt", "w") as f:
+    with open(os.path.join(path, os.pardir, "config.txt"), "w") as f:
         for c in [config1, config2]:
             for k, v in c.items():
                 f.write(k + " = " + v + "\n")
