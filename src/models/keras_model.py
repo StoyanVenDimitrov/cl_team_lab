@@ -65,7 +65,7 @@ class MultitaskLearner(Model):
             self.bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_cased_L-12_H-768_A-12/1",
                             trainable=False)
 
-        self.logdir = utils.make_logdir("Multitask", pre_config, config)
+        self.logdir = utils.make_logdir("keras", "Multitask", pre_config, config)
         self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
 
         checkpoint_path = os.path.join(
@@ -399,7 +399,7 @@ class SingletaskLearner(Model):
             self.bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
                             trainable=True)
 
-        self.logdir = utils.make_logdir("Singletask", pre_config, config)
+        self.logdir = utils.make_logdir("keras", "Singletask", pre_config, config)
         self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
 
         checkpoint_path = os.path.join(
