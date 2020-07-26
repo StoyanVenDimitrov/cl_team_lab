@@ -179,9 +179,9 @@ class MultitaskLearner(Model):
                 outputs=[label_output, section_output, worthiness_output],
             )
 
-        self.our_model.summary()
+        self.model.summary()
         tf.keras.utils.plot_model(
-            self.our_model, to_file="multi_input_and_output_model.png", show_shapes=True
+            self.model, to_file="multi_input_and_output_model.png", show_shapes=True
         )
 
         def _masked_loss_function(y_true, y_pred):
