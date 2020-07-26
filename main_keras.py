@@ -168,8 +168,7 @@ class Trainer:
         )
         labels_tensor_dev = keras_model.prepare_dev_data(labels_dev, labels_tokenizer)
 
-        text_tensor_test = keras_model.prepare_dev_data(end_time = time.time()
-        total_time 
+        text_tensor_test = keras_model.prepare_dev_data(
             text_test,
             text_tokenizer,
             max_len=max_len,
