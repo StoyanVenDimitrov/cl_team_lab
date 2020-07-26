@@ -168,7 +168,8 @@ class Trainer:
         )
         labels_tensor_dev = keras_model.prepare_dev_data(labels_dev, labels_tokenizer)
 
-        text_tensor_test = keras_model.prepare_dev_data(
+        text_tensor_test = keras_model.prepare_dev_data(end_time = time.time()
+        total_time 
             text_test,
             text_tokenizer,
             max_len=max_len,
@@ -267,8 +268,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         required=False,
-        default="configs/default.conf",
-        help="Set to True if metrics should me logged with mlflow, else set to False.",
+        default="configs/keras/default.conf",
+        help="Path to configuration file.",
     )
 
     args = parser.parse_args()

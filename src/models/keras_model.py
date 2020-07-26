@@ -27,6 +27,11 @@ from src.utils import utils
 
 BUFFER_SIZE = 11000
 
+bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/2",
+                            trainable=True)
+FullTokenizer = bert.bert_tokenization.FullTokenizer
+max_seq_length = 50  # Your choice here.
+
 
 class MultitaskLearner(Model):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
@@ -174,11 +179,10 @@ class MultitaskLearner(Model):
                 outputs=[label_output, section_output, worthiness_output],
             )
 
-        self.model.summary()
+        self.our_model.summary()
         tf.keras.utils.plot_model(
-            self.model, to_file="multi_input_and_output_model.png", show_shapes=True
+            self.our_model, to_file="multi_input_and_output_model.png", show_shapes=True
         )
-        # for the loss object: https://www.dlology.com/blog/how-to-multi-task-learning-with-missing-labels-in-keras/
 
         def _masked_loss_function(y_true, y_pred):
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
@@ -328,8 +332,8 @@ class MultitaskLearner(Model):
                 },
                 {
                     'dense': labels,
-                    'dense_1': sections,
-                    'dense_2': worthiness
+                    # 'dense_1': sections,
+                    # 'dense_2': worthiness
                 }
             )
         )

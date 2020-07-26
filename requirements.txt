@@ -3,10 +3,14 @@ wandb==0.9.3
 jsonlines
 tensorflow-datasets
 tensorflow-addons
+tensorflow-hub==0.8.0
+tensorboard==2.2.2
+tqdm
 nltk
 spacy
 scikit-learn
 graphviz
 pydot
+bert-for-tf2
 https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.2.5/en_core_sci_lg-0.2.5.tar.gz
 

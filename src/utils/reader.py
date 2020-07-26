@@ -6,6 +6,72 @@ import tensorflow as tf
 from nltk.stem import WordNetLemmatizer
 import random
 import spacy
+import nlp
+
+
+class SciciteReaderNLP:
+    def __init__(self, config):
+        self.lemmatize = True if config["lemmatize"] == "True" else False
+        self.do_balance_dataset = True if config["balance_dataset"] == "True" else False
+        self.shuffle_data = True if config["shuffle_data"] == "True" else False
+
+        if self.lemmatize:
+            self.nlp = spacy.load("en_core_sci_lg")
+    
+    def preprocess_data(self):
+        print("Processing data...")
+
+        dataset = nlp.load_dataset("scicite")
+        train, dev, test = dataset["train"], dataset["validation"], dataset["test"]
+
+        if self.lemmatize:
+            pass
+
+        if self.do_balance_dataset:
+            train, dev, test = self.balance_data(train), self.balance_data(dev), self.balance_data(test)
+
+        return train, dev, test
+
+    def lemmatize_sentence(self, sentence):
+        doc = self.nlp(sentence)
+
+        lemmas = []
+
+        for token in doc:
+            lemmas.append(token.lemma_)
+
+        return " ".join(lemmas)
+        
+    def balance_data(self, dataset):
+        print("Balancing data...")
+        class0 = []
+        class1 = []
+        class2 = []
+
+        for i, e in enumerate(dataset):
+            if e["label"] == 0:
+                class0.append(i)
+            elif e["label"] == 1:
+                class1.append(i)
+            elif e["label"] == 2:
+                class2.append(i)
+
+        sample_size = min(len(class0), len(class1), len(class2))
+
+        bclass0 = random.sample(class0, sample_size)
+        bclass1 = random.sample(class1, sample_size)
+        bclass2 = random.sample(class2, sample_size)
+
+        bidxs = bclass0 + bclass1 + bclass2
+        if self.shuffle_data:
+            random.shuffle(bidxs)
+
+        def keep(instance, idx):
+            return idx in bidxs
+
+        bdataset = dataset.filter(keep, with_indices=True, load_from_cache_file=False)
+
+        return bdataset
 
 
 class SciciteReader:

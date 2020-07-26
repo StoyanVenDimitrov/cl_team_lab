@@ -12,6 +12,7 @@ def load_config(path):
 
 def write_config(path, config1, config2):
     with open(os.path.join(path, os.pardir, "config.txt"), "w") as f:
+        f.write("[param]\n")
         for c in [config1, config2]:
             for k, v in c.items():
                 f.write(k + " = " + v + "\n")
@@ -29,16 +30,19 @@ def make_filename(config):
             continue
         elif "path" in para or "dataset" in para:
             continue
+        elif para == "model_version":
+            if "/" in para:
+                para = para.replace("/", "_")
         filename += f"{sep}{para}={config[para]}"
     return filename
 
 
-def make_logdir(_type, config1, config2):
+def make_logdir(dir, _type, config1, config2):
     filename1 = make_filename(config1)
     filename2 = make_filename(config2)
 
     logdir = os.path.join(
-        "saved_models", _type + "_" + filename1 + "_" + filename2, "logs"
+        "saved_models", dir, _type + "_" + filename1 + "_" + filename2, "logs"
     )
     if not os.path.isdir(logdir):
         os.makedirs(logdir)
@@ -76,14 +80,32 @@ def get_log_params(config):
     return params
 
 
-def wandb_init(config):
-    wandb.init(
+def wandb_init(config, _type="model"):
+    if _type == "model":
+        wandb.init(
+            config={
+                "model_version": config["model_version"],
+                "epochs": int(config["epochs"]),
+                "batch_size": int(config["batch_size"]),
+                "max_len": int(config["max_len"]),
+                "learning_rate": float(config["learning_rate"]),
+                "bfloat16": config["bfloat16"]
+            }, reinit=True
+        )
+    elif _type == "preprocess":
+        wandb.init(
+            config={
+                "lemmatize": config["lemmatize"],
+                "lowercase": config["lowercase"],
+                "balance_dataset": config["balance_dataset"],
+                "shuffle_data": config["shuffle_data"]
+            }, reinit=True
+        )
+
+
+def wandb_init_metrics():
+     wandb.init(
         config={
-            "epoch": int(config["epoch"]),
-            "batch": int(config["batch"]),
-            "max_len": int(config["max_len"]),
-            "learning_rate": int(config["learning_rate"]),
-            "balanced_data": True if config["balanced_data"] == "True" else False,
             "train_accuracy": 0.0,
             "train_f1": 0.0,
             "val_macro_avg_precision": 0.0,
@@ -110,7 +132,7 @@ def wandb_init(config):
             "test_class_2_precision": 0.0,
             "test_class_2_recall": 0.0,
             "test_class_2_f1-score": 0.0,
-        }
+        }, reinit=True
     )
 
 
