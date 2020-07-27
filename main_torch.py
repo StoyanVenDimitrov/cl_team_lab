@@ -23,9 +23,6 @@ def run(args, config):
     if args.test:
         model.evaluate(test_dataloader)
 
-    # dir = utils.make_logdir("Torch", config["preprocessor"], config["torch"])
-    # print(dir)
-
 
 if __name__ == "__main__":
     start_time = time.time()
