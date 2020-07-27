@@ -4,7 +4,8 @@ from src.models.model import Model
 from tensorflow.keras import backend as K
 import tensorflow_hub as hub
 import tensorflow_addons as tfa
-import bert
+from official.nlp.bert import tokenization
+
 
 
 from src import evaluation
@@ -12,9 +13,8 @@ from src import evaluation
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
 BUFFER_SIZE = 11000
-bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
-                            trainable=True)
-FullTokenizer = bert.bert_tokenization.FullTokenizer
+albert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
+                              trainable=True)
 max_seq_length = 100  # Your choice here.
 
 
@@ -44,7 +44,7 @@ class MultitaskLearner(Model):
                                            name="input_mask")
         segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
                                             name="segment_ids")
-        pooled_output, sequence_output = bert_layer([input_word_ids, input_mask, segment_ids])
+        pooled_output, sequence_output = albert_layer([input_word_ids, input_mask, segment_ids])
         # output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
         #     tf.keras.layers.LSTM(
         #         self.rnn_units,
@@ -138,9 +138,8 @@ class MultitaskLearner(Model):
 
     def prepare_input_data(self, data):
         """prepare text input for BERT"""
-        vocab_file = bert_layer.resolved_object.vocab_file.asset_path.numpy()
-        do_lower_case = bert_layer.resolved_object.do_lower_case.numpy()
-        tokenizer = FullTokenizer(vocab_file, do_lower_case)
+        sp_model_file = albert_layer.resolved_object.sp_model_file.asset_path.numpy()
+        tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
         input_ids, input_masks, input_segments = [], [], []
 
         for s in data:
@@ -278,9 +277,8 @@ class SingletaskLearner(Model):
 
     def prepare_input_data(self, data):
         """prepare text input for BERT"""
-        vocab_file = bert_layer.resolved_object.vocab_file.asset_path.numpy()
-        do_lower_case = bert_layer.resolved_object.do_lower_case.numpy()
-        tokenizer = FullTokenizer(vocab_file, do_lower_case)
+        sp_model_file = albert_layer.resolved_object.sp_model_file.asset_path.numpy()
+        tokenizer = FullSentencePieceTokenizer(sp_model_file)
         input_ids, input_masks, input_segments = [], [], []
 
         for s in data:
