@@ -105,7 +105,7 @@ class SciciteReader:
             sample["tokens"] = tokens
         return data
 
-    def load_multitask_data(self, for_validation=False, multitask=False):
+    def load_data(self, for_validation=False, multitask=False):
 
         data = []
 

@@ -4,7 +4,11 @@ from src.models.model import Model
 from tensorflow.keras import backend as K
 import tensorflow_hub as hub
 import tensorflow_addons as tfa
-import bert
+from official.nlp.bert import tokenization
+from src.utils import utils
+import os
+
+print(tf.__version__)
 
 
 from src import evaluation
@@ -12,67 +16,68 @@ from src import evaluation
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
 BUFFER_SIZE = 11000
-
-bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/2",
-                            trainable=True)
-FullTokenizer = bert.bert_tokenization.FullTokenizer
-max_seq_length = 50  # Your choice here.
+albert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_base/1",
+                              trainable=False)
+max_seq_length = 100  # Your choice here.
 
 
 class MultitaskLearner(Model):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
     def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
+        pre_config = config["preprocessor"]
+        config = config["multitask_trainer"]
         super().__init__(config)
+        # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
         self.rnn_units = int(config["rnn_units"])
+        self.atention_size = 2 * self.rnn_units
         self.batch_size = int(config['batch_size'])
         self.number_of_epochs = int(config['number_of_epochs'])
         self.validation_step = int(config['validation_step'])
         self.mask_value = 1  # for masking missing label
-        self.learning_rate = float(config["learning_rate"])
+        self.worthiness_weight = float(config['worthiness_weight'])
+        self.section_weight = float(config['section_weight'])
+
+        self.logdir = utils.make_logdir("keras", "Multitask", pre_config, config)
 
     def create_model(
         self, labels_size, section_size, worthiness_size
     ):
+        self.labels_size, self.section_size, self.worthiness_size = labels_size+1, section_size+1, worthiness_size+1
         input_word_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
                                                name="input_word_ids")
         input_mask = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
                                            name="input_mask")
         segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
                                             name="segment_ids")
-        pooled_output, sequence_output = bert_layer([input_word_ids, input_mask, segment_ids])
-
-        output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
-            tf.keras.layers.LSTM(
-                self.rnn_units,
-                stateful=False,
-                return_sequences=True,
-                return_state=True,
-                recurrent_initializer="glorot_uniform",
-            )
-        )(
-            sequence_output
-        )
-        state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-
-        # attention_layer = tf.keras.layers.Attention()(state_h)
-
-        label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
+        pooled_output, sequence_output = albert_layer([input_word_ids, input_mask, segment_ids])
+        # output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
+        #     tf.keras.layers.LSTM(
+        #         self.rnn_units,
+        #         stateful=False,
+        #         return_sequences=True,
+        #         return_state=True,
+        #         recurrent_initializer="glorot_uniform",
+        #     )
+        # )(
+        #     sequence_output
+        # )
+        # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
+        state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
+        label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax", name='dense')(
             state_h
         )
-        # section_output = tf.keras.layers.Dense(section_size+1, activation="softmax")(
-        #     state_h
-        # )
-        # worthiness_output = tf.keras.layers.Dense(worthiness_size+1, activation="softmax")(
-        #     state_h
-        # )
+        section_output = tf.keras.layers.Dense(section_size+1, activation="softmax", name='dense_1')(
+            state_h
+        )
+        worthiness_output = tf.keras.layers.Dense(worthiness_size+1, activation="softmax", name='dense_2')(
+            state_h
+        )
 
         self.our_model = tf.keras.Model(
             inputs=[input_word_ids, input_mask, segment_ids],
-            # outputs=[label_output, section_output, worthiness_output]
-            # outputs=[label_output]
-            outputs=label_output
+            outputs=[label_output, section_output, worthiness_output]
         )
 
         self.our_model.summary()
@@ -83,6 +88,11 @@ class MultitaskLearner(Model):
         def masked_loss_function(y_true, y_pred):
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
             y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
+            # compare y_v len to find out the current type of labels and output the loss coeff or 1:
+            section_loss_weight = K.switch(K.equal(y_v.shape[1], self.section_size), self.section_weight, 1.0)
+            worthiness_loss_weight = K.switch(K.equal(y_v.shape[1], self.worthiness_size), self.worthiness_weight, 1.0)
+            # update the mask to scale with the needed factor:
+            mask = mask * section_loss_weight * worthiness_loss_weight
             return K.categorical_crossentropy(
                 y_v * mask,
                 K.clip(y_pred * mask, min_value=1e-15, max_value=1e10)
@@ -90,11 +100,8 @@ class MultitaskLearner(Model):
 
         # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
-        optimizer = tf.keras.optimizers.Adam(learning_rate=1-self.learning_rate)
-
         self.our_model.compile(
             optimizer='adam',
-            # optimizer=optimizer,
             loss=masked_loss_function,
             metrics={'dense': F1ForMultitask(num_classes=labels_size)} #, average='macro')}
         )
@@ -102,8 +109,14 @@ class MultitaskLearner(Model):
     def fit_model(self, dataset, val_dataset):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         #val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
-        val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
+        val_dataset = val_dataset.padded_batch(5, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
+        # class_weight = {
+        #             'dense': {label: 1 for label in range(self.labels_size)},
+        #             'dense_1': {section: self.section_weight for section in range(self.section_size)},
+        #             'dense_2': {worth: self.worthiness_weight for worth in range(self.worthiness_size)}
+        #         }
+
         self.our_model.fit(
             dataset,
             epochs=self.number_of_epochs,
@@ -132,9 +145,8 @@ class MultitaskLearner(Model):
 
     def prepare_input_data(self, data):
         """prepare text input for BERT"""
-        vocab_file = bert_layer.resolved_object.vocab_file.asset_path.numpy()
-        do_lower_case = bert_layer.resolved_object.do_lower_case.numpy()
-        tokenizer = FullTokenizer(vocab_file, do_lower_case)
+        sp_model_file = albert_layer.resolved_object.sp_model_file.asset_path.numpy()
+        tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
         input_ids, input_masks, input_segments = [], [], []
 
         for s in data:
@@ -155,15 +167,137 @@ class MultitaskLearner(Model):
                 },
                 {
                     'dense': labels,
-                    # 'dense_1': sections,
-                    # 'dense_2': worthiness
+                    'dense_1': sections,
+                    'dense_2': worthiness
                 }
             )
         )
         return dataset
 
     def create_dev_dataset(self, ids, mask, segments, labels):
-            dataset = tf.data.Dataset.from_tensor_slices(
+        dataset = tf.data.Dataset.from_tensor_slices(
+            (
+                {
+                    'input_word_ids': ids,
+                    'input_mask': mask,
+                    'segment_ids': segments
+                },
+                {
+                    'dense': labels
+                }
+            )
+        )
+        return dataset
+
+
+class SingletaskLearner(Model):
+    """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
+
+    def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
+        super().__init__(config)
+        # self.create_model(
+        self.embedding_dim = int(config["embedding_dim"])
+        self.rnn_units = int(config["rnn_units"])
+        self.atention_size = 2 * self.rnn_units
+        self.batch_size = int(config['batch_size'])
+        self.number_of_epochs = int(config['number_of_epochs'])
+        self.mask_value = 1  # for masking missing label
+        self.validation_step = int(config['validation_step'])
+
+    def create_model(
+        self, labels_size
+    ):
+        input_word_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+                                               name="input_word_ids")
+        input_mask = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+                                           name="input_mask")
+        segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+                                            name="segment_ids")
+        pooled_output, sequence_output = bert_layer([input_word_ids, input_mask, segment_ids])
+        output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
+            tf.keras.layers.LSTM(
+                self.rnn_units,
+                stateful=False,
+                return_sequences=True,
+                return_state=True,
+                recurrent_initializer="glorot_uniform",
+            )
+        )(
+            sequence_output
+        )
+        # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
+        state_h = WeirdAttention(self.atention_size)(output)
+        label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
+            state_h
+        )
+
+        self.model = tf.keras.Model(
+            inputs=[input_word_ids, input_mask, segment_ids], outputs=label_output
+        )
+
+        self.model.summary()
+        tf.keras.utils.plot_model(
+            self.model, to_file="single_input_and_output_model.png", show_shapes=True
+        )
+
+        def loss_function(y_true, y_pred):
+            loss = tf.keras.losses.sparse_categorical_crossentropy(
+                y_true, y_pred, from_logits=False
+            )
+            return loss
+
+        self.model.compile(
+            optimizer='adam',
+            loss=loss_function,
+            metrics={'dense': F1ForMultitask(num_classes=labels_size)}  # , average='macro')}
+        )
+
+    def fit_model(self, dataset, val_dataset):
+        dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
+        val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
+        dataset = dataset.shuffle(BUFFER_SIZE)
+        self.model.fit(
+            dataset,
+            epochs=self.number_of_epochs,
+            callbacks=[ValidateAfter(val_dataset, self.validation_step)]
+        )
+
+    def prepare_output_data(self, data):
+        """tokenize and encode for label, section... """
+        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
+
+        filtered_data = list(filter('__unknown__'.__ne__, data))
+        component_tokenizer.fit_on_texts(filtered_data)
+
+        tensor = component_tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                               padding='post')
+        return tensor, component_tokenizer
+    
+    def prepare_dev_output_data(self, data, tokenizer):
+        tensor = tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                               padding='post')
+        return tensor
+
+    def prepare_input_data(self, data):
+        """prepare text input for BERT"""
+        sp_model_file = albert_layer.resolved_object.sp_model_file.asset_path.numpy()
+        tokenizer = FullSentencePieceTokenizer(sp_model_file)
+        input_ids, input_masks, input_segments = [], [], []
+
+        for s in data:
+            stokens = tokenizer.tokenize(s)
+            stokens = ["[CLS]"] + stokens + ["[SEP]"]
+            input_ids.append(get_ids(stokens, tokenizer, max_seq_length))
+            input_masks.append(get_masks(stokens, max_seq_length))
+            input_segments.append(get_segments(stokens, max_seq_length))
+        return input_ids, input_masks, input_segments
+
+    def create_dataset(self, ids, mask, segments, labels):
+        dataset = tf.data.Dataset.from_tensor_slices(
                 (
                     {
                         'input_word_ids': ids,
@@ -175,7 +309,39 @@ class MultitaskLearner(Model):
                     }
                 )
             )
-            return dataset
+        return dataset
+
+    def create_dev_dataset(self, ids, mask, segments, labels):
+            return self.create_dataset(ids, mask, segments, labels)
+
+    def eval(self, dataset, save_output=True):
+        batch_dataset = dataset.padded_batch(self.batch_size, drop_remainder=False)
+
+        preds = self.model.predict(batch_dataset)
+        y_pred = preds[:, 2:].argmax(1) + 2
+        y_true = [l["dense"][0].numpy() for _, l in dataset.take(-1)]
+
+        report_json = classification_report(
+            np.asarray(y_true), y_pred, labels=[2, 3, 4], output_dict=True
+        )
+        report_text = classification_report(
+            np.asarray(y_true), y_pred, labels=[2, 3, 4]
+        )
+        print(report_text)
+
+        if save_output:
+            results_path = os.path.join(self.logdir, os.pardir)
+            with open(results_path + "/results.json", "w") as f:
+                json.dump(report_json, f)
+            with open(results_path + "/results.txt", "w") as f:
+                f.write(report_text)
+            print("Saved result files results.json and results.txt to:", results_path)
+
+    def save_model(self):
+        path = os.path.join(self.logdir, os.pardir, "model.h5")
+        print("Saving model to path:", path)
+        # self.model.save(path)
+        self.model.save_weights(path)
 
 def get_masks(tokens, max_seq_length):
     """Mask for padding"""
@@ -206,6 +372,24 @@ def get_ids(tokens, tokenizer, max_seq_length):
     return input_ids
 
 
+class WeirdAttention(tf.keras.layers.Layer):
+    """attention as in Cohan et al., 2019"""
+    def __init__(self, units):
+        super(WeirdAttention, self).__init__()
+        self.units = units
+        self.w = self.add_weight(shape=(self.units, 1),
+                                 initializer='random_normal',
+                                 trainable=True)
+
+    # TODO: strictly, self.w should be added in the build():
+    # https://www.tensorflow.org/guide/keras/custom_layers_and_models#best_practice_deferring_weight_creation_until_the_shape_of_the_inputs_is_known
+    def call(self, inputs):
+        alpha_score = tf.linalg.matvec(inputs, tf.squeeze(self.w))
+        alpha = K.softmax(alpha_score)
+        scored_input = inputs * tf.expand_dims(alpha, axis=-1)
+        return tf.reduce_sum(scored_input, 1)
+
+
 class ValidateAfter(tf.keras.callbacks.Callback):
     def __init__(self, val_data, val_step):
         super(ValidateAfter, self).__init__()
@@ -230,7 +414,7 @@ class F1ForMultitask(tfa.metrics.F1Score):
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         # skip to count samples with label __unknown__
-        # mask = K.cast(K.not_equal(y_true, 1), K.floatx())
+        mask = K.cast(K.not_equal(y_true, 1), K.floatx())
         if self.threshold is None:
             threshold = tf.reduce_max(y_pred, axis=-1, keepdims=True)
             # make sure [0, 0, 0] doesn't become [1, 1, 1]
@@ -248,8 +432,8 @@ class F1ForMultitask(tfa.metrics.F1Score):
         def _weighted_sum(val, sample_weight):
             if sample_weight is not None:
                 val = tf.math.multiply(val, tf.expand_dims(sample_weight, 1))
-            # return tf.reduce_sum(val*mask, axis=self.axis)
-            return tf.reduce_sum(val, axis=self.axis)[2:]
+            return tf.reduce_sum(val*mask, axis=self.axis)[2:]
+            # return tf.reduce_sum(val, axis=self.axis)
         self.true_positives.assign_add(_weighted_sum(y_pred * y_true, sample_weight))
         self.false_positives.assign_add(
             _weighted_sum(y_pred * (1 - y_true), sample_weight)
