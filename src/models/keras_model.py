@@ -55,13 +55,15 @@ class MultitaskLearner(Model):
             print("Loading ELMo embedding...")
             self.embedding_layer = hub.KerasLayer("https://tfhub.dev/google/elmo/3", signature="tokens", output_key="elmo", trainable=False)
         elif self.embedding_type == "bert":
+            print("Loading BERT embedding...")
             # self.bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
             #                 trainable=False)
             self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_cased_L-12_H-768_A-12/1",
                             trainable=False)
         elif self.embedding_type == "albert":
-            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
-                            trainable=True)
+            print("Loading AlBERT embedding...")
+            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_base/1",
+                            trainable=False)
 
         self.logdir = utils.make_logdir("keras", "Multitask", pre_config, config)
         self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
@@ -401,10 +403,10 @@ class SingletaskLearner(Model):
                             trainable=False)
         elif self.embedding_type == "albert":
             self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
-                            trainable=True)
+                            trainable=False)
         elif self.embedding_type == "albert":
             self.albert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
-                            trainable=True)
+                            trainable=False)
 
         self.logdir = utils.make_logdir("keras", "Singletask", pre_config, config)
         self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)

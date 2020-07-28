@@ -34,11 +34,7 @@ class Trainer:
 
         keras_model = MultitaskLearner(self.config)
 
-<<<<<<< HEAD
         if embedding_type == "bert" or embedding_type == "albert":
-=======
-        if embedding_type in ["bert", "albert"]:
->>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
            input_ids, input_masks, input_segments = keras_model.prepare_input_data(text)
            dev_input_ids, dev_input_masks, dev_input_segments = keras_model.prepare_input_data(text_dev)
            test_input_ids, test_input_masks, test_input_segments = keras_model.prepare_input_data(text_test)
@@ -69,11 +65,7 @@ class Trainer:
                 text=text_tensor_test, 
                 labels=labels_tensor_test,
                 )
-<<<<<<< HEAD
         elif embedding_type == "bert" or embedding_type == "albert":
-=======
-        elif embedding_type in ["bert", "albert"]:
->>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
             dataset = keras_model.create_dataset(
                 text=text_tensor,
                 labels=labels_tensor,
@@ -150,11 +142,7 @@ class Trainer:
 
         keras_model = SingletaskLearner(self.config)
 
-<<<<<<< HEAD
         if embedding_type == "bert" or embedding_type == "albert":
-=======
-        if embedding_type in ["bert", "albert"]:
->>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
            input_ids, input_masks, input_segments = keras_model.prepare_input_data(text)
            dev_input_ids, dev_input_masks, dev_input_segments = keras_model.prepare_input_data(text_dev)
            test_input_ids, test_input_masks, test_input_segments = keras_model.prepare_input_data(text_test)
@@ -198,11 +186,7 @@ class Trainer:
             dataset = keras_model.create_dataset(text=text_tensor, labels=labels_tensor)
             dev_dataset = keras_model.create_dev_dataset(text=text_tensor_dev, labels=labels_tensor_dev)
             test_dataset = keras_model.create_dev_dataset(text=text_tensor_test, labels=labels_tensor_test)
-<<<<<<< HEAD
         elif embedding_type == "bert" or embedding_type == "albert":
-=======
-        if embedding_type in ["bert", "albert"]:
->>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
             dataset = keras_model.create_dataset(
                 text=text_tensor,
                 labels=labels_tensor,
