@@ -34,7 +34,7 @@ class Trainer:
 
         keras_model = MultitaskLearner(self.config)
 
-        if embedding_type == "bert":
+        if embedding_type == "bert" or embedding_type == "albert":
            input_ids, input_masks, input_segments = keras_model.prepare_input_data(text)
            dev_input_ids, dev_input_masks, dev_input_segments = keras_model.prepare_input_data(text_dev)
            test_input_ids, test_input_masks, test_input_segments = keras_model.prepare_input_data(text_test)
@@ -65,7 +65,7 @@ class Trainer:
                 text=text_tensor_test, 
                 labels=labels_tensor_test,
                 )
-        elif embedding_type == "bert":
+        elif embedding_type == "bert" or embedding_type == "albert":
             dataset = keras_model.create_dataset(
                 text=text_tensor,
                 labels=labels_tensor,
@@ -142,7 +142,7 @@ class Trainer:
 
         keras_model = SingletaskLearner(self.config)
 
-        if embedding_type == "bert":
+        if embedding_type == "bert" or embedding_type == "albert":
            input_ids, input_masks, input_segments = keras_model.prepare_input_data(text)
            dev_input_ids, dev_input_masks, dev_input_segments = keras_model.prepare_input_data(text_dev)
            test_input_ids, test_input_masks, test_input_segments = keras_model.prepare_input_data(text_test)
@@ -186,7 +186,7 @@ class Trainer:
             dataset = keras_model.create_dataset(text=text_tensor, labels=labels_tensor)
             dev_dataset = keras_model.create_dev_dataset(text=text_tensor_dev, labels=labels_tensor_dev)
             test_dataset = keras_model.create_dev_dataset(text=text_tensor_test, labels=labels_tensor_test)
-        elif embedding_type == "bert":
+        elif embedding_type == "bert" or embedding_type == "albert":
             dataset = keras_model.create_dataset(
                 text=text_tensor,
                 labels=labels_tensor,
@@ -233,13 +233,15 @@ class Trainer:
 def run(args, config):
     if args.train:
         trainer = Trainer(args, config)
-        if "multitask_trainer" in config:
-            print("Running multitask trainer...")
-            trainer.keras_multitask(args)
-            tf.keras.backend.clear_session()
-        if "singletask_trainer" in config:
-            print("Running singletask trainer...")
-            trainer.keras_singletask(args)
+        trainer.keras_singletask(args)
+        # print(config.sections())
+        # if "multitask_trainer" in config:
+        #     print("Running multitask trainer...")
+        #     trainer.keras_multitask(args)
+        #     tf.keras.backend.clear_session()
+        # if "singletask_trainer" in config:
+        #     print("Running singletask trainer...")
+        #     trainer.keras_singletask(args)
 
 
 if __name__ == "__main__":
