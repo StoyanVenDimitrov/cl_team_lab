@@ -7,40 +7,49 @@ from nltk.stem import WordNetLemmatizer
 import random
 import spacy
 import nlp
+import pandas as pd
+import jsonlines
 
 
 class SciciteReaderNLP:
     def __init__(self, config):
+        self.data_dir = config["dataset"]
         self.lemmatize = True if config["lemmatize"] == "True" else False
         self.do_balance_dataset = True if config["balance_dataset"] == "True" else False
         self.shuffle_data = True if config["shuffle_data"] == "True" else False
 
         if self.lemmatize:
             self.nlp = spacy.load("en_core_sci_lg")
+
+    def load_dataset(self, file):
+        json_data = []
+
+        labels = {"method": 0, "background": 1, "result": 2}
+
+        with jsonlines.open(file) as reader:
+            for obj in reader:
+                obj["label"] = labels[obj["label"]]
+                json_data.append(obj)
+            
+        df = pd.DataFrame(json_data)
+
+        return nlp.Dataset.from_pandas(df)
     
     def preprocess_data(self):
         print("Processing data...")
 
-        dataset = nlp.load_dataset("scicite")
-        train, dev, test = dataset["train"], dataset["validation"], dataset["test"]
-
-        if self.lemmatize:
-            pass
+        train_file = os.path.join(self.data_dir, "train.jsonl")
+        dev_file = os.path.join(self.data_dir, "dev.jsonl")
+        test_file = os.path.join(self.data_dir, "test.jsonl")
+        
+        train = self.load_dataset(train_file)
+        dev = self.load_dataset(dev_file)
+        test = self.load_dataset(test_file)
 
         if self.do_balance_dataset:
-            train, dev, test = self.balance_data(train), self.balance_data(dev), self.balance_data(test)
+            train, dev = self.balance_data(train), self.balance_data(dev)
 
         return train, dev, test
-
-    def lemmatize_sentence(self, sentence):
-        doc = self.nlp(sentence)
-
-        lemmas = []
-
-        for token in doc:
-            lemmas.append(token.lemma_)
-
-        return " ".join(lemmas)
         
     def balance_data(self, dataset):
         print("Balancing data...")

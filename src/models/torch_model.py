@@ -6,8 +6,8 @@ from transformers import BertConfig, BertTokenizer, BertForSequenceClassificatio
 from tqdm import trange, tqdm
 from sklearn.metrics import f1_score, accuracy_score, classification_report
 from src.utils import utils
-import wandb
-wandb.init(reinit=True)
+# import wandb
+# wandb.init(reinit=True)
 
 MODELS = {
     "albert": [AlbertConfig, AlbertTokenizer, AlbertForSequenceClassification], 
@@ -21,7 +21,7 @@ class TransformerModel:
         self._config = config
         # if self.args.log_metrics:
         #     self.init_logging(self._config)
-        pre_config = config["preprocessor"]
+        self.pre_config = config["preprocessor"]
         config = config["torch"]
         self.config = config
         self.epochs = int(config["epochs"])
@@ -40,7 +40,7 @@ class TransformerModel:
         self.init_model()
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        self.logdir = utils.make_logdir("torch", "Torch", pre_config, config)
+        self.logdir = utils.make_logdir("torch", "Torch", self.pre_config, config)
 
     def init_model(self):
         print("Initializing model...")
@@ -57,7 +57,14 @@ class TransformerModel:
         print("Model initialized!")
 
     def encode(self, text):
-        return self.tokenizer(text["string"], truncation=True, max_length=self.max_len, padding="max_length")
+        if self.pre_config["lemmatize"] == "True":
+            if "lemmatized_string" in text.keys():
+                key = "lemmatized_string"
+            else:
+                raise KeyError(f"You have not lemmatized the data yet. Execute './run_lemmatizer.sh' to lemmatize the data.")
+        else:
+            key = "string"
+        return self.tokenizer(text[key], truncation=True, max_length=self.max_len, padding="max_length")
 
     def prepare_data(self, train, dev, test, batch_size=8):
         print("Preparing data...")

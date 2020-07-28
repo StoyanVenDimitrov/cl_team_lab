@@ -9,8 +9,8 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import tensorflow as tf
 from tensorflow.python.util import deprecation
-
 deprecation._PRINT_DEPRECATION_WARNINGS = False
+
 from src.models.model import Model
 from tensorflow.keras import backend as K
 import tensorflow_addons as tfa
@@ -20,16 +20,18 @@ from official.nlp.bert import tokenization
 import numpy as np
 import json
 import bert
+from official.nlp.bert import tokenization
 
 from src import evaluation
 from src.utils import utils
 
-"""Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
-
 BUFFER_SIZE = 11000
 
+<<<<<<< HEAD
 max_seq_length = 50  # Your choice here.
 
+=======
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
 
 class MultitaskLearner(Model):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
@@ -56,16 +58,21 @@ class MultitaskLearner(Model):
 
         if self.embedding_type == "elmo":
             print("Loading ELMo embedding...")
-            self.elmo_layer = hub.KerasLayer("https://tfhub.dev/google/elmo/3", signature="tokens", output_key="elmo", trainable=False)
+            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/google/elmo/3", signature="tokens", output_key="elmo", trainable=False)
         elif self.embedding_type == "bert":
             # self.bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
             #                 trainable=False)
-            self.bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_cased_L-12_H-768_A-12/1",
+            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_cased_L-12_H-768_A-12/1",
                             trainable=False)
         elif self.embedding_type == "albert":
+<<<<<<< HEAD
             self.albert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_base/1",
                             trainable=True)
 
+=======
+            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
+                            trainable=True)
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
 
         self.logdir = utils.make_logdir("keras", "Multitask", pre_config, config)
         self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
@@ -80,7 +87,6 @@ class MultitaskLearner(Model):
 
     def elmo_embedding(self, x):
         return self.elmo_layer(inputs={"tokens": tf.squeeze(tf.cast(x, tf.string)), "sequence_len": tf.constant(int(self.batch_size)*[self.max_seq_len])})
-
 
     def create_model(self, vocab_size, labels_size, section_size, worthiness_size):
         self.labels_size, self.section_size, self.worthiness_size = (
@@ -117,16 +123,18 @@ class MultitaskLearner(Model):
             else:
                 state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
                 
-        elif self.embedding_type == "bert":
+        elif self.embedding_type in ["bert", "albert"]:
+
             input_word_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                                name="input_word_ids")
             input_mask = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                             name="input_mask")
             segment_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                                 name="segment_ids")
-            pooled_output, sequence_output = self.bert_layer([input_word_ids, input_mask, segment_ids])
+            pooled_output, sequence_output = self.embedding_layer([input_word_ids, input_mask, segment_ids])
 
             state_h = pooled_output
+<<<<<<< HEAD
         
         elif self.embedding_type == "albert":
             input_word_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
@@ -137,10 +145,13 @@ class MultitaskLearner(Model):
                                                 name="segment_ids")
             pooled_output, sequence_output = self.albert_layer([input_word_ids, input_mask, segment_ids])
             state_h = pooled_output
+=======
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
 
         elif self.embedding_type == "elmo":
             text_input_layer = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype="string")
-            input_embedding = tf.keras.layers.Lambda(self.elmo_embedding, output_shape=(self.max_seq_len, 1024))(text_input_layer)
+            # input_embedding = tf.keras.layers.Lambda(self.elmo_embedding, output_shape=(self.max_seq_len, 1024))(text_input_layer)
+            input_embedding = self.elmo_embedding(text_input_layer)
 
             output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
             tf.keras.layers.LSTM(
@@ -174,7 +185,11 @@ class MultitaskLearner(Model):
                 inputs=text_input_layer,
                 outputs=[label_output, section_output, worthiness_output],
             )
+<<<<<<< HEAD
         elif self.embedding_type == "bert" or self.embedding_type == "albert":
+=======
+        elif self.embedding_type in ["bert", "albert"]:
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
             self.model = tf.keras.Model(
                 inputs=[input_word_ids, input_mask, segment_ids],
                 outputs=[label_output, section_output, worthiness_output]
@@ -230,11 +245,11 @@ class MultitaskLearner(Model):
         self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
-            callbacks=[
-                ValidateAfter(val_dataset, self.validation_step),
-                self.tensorboard_callback,
-                self.checkpoint_callback,
-            ],
+            # callbacks=[
+            #     ValidateAfter(val_dataset, self.validation_step),
+                # self.tensorboard_callback,
+                # self.checkpoint_callback,
+            # ],
         )
 
     def eval(self, dataset, save_output=True):
@@ -284,6 +299,7 @@ class MultitaskLearner(Model):
         return tensor
 
     def prepare_input_data(self, data):
+<<<<<<< HEAD
         """prepare text input for BERT"""
         if self.embedding_type == "bert":
             vocab_file = self.bert_layer.resolved_object.vocab_file.asset_path.numpy()
@@ -292,6 +308,17 @@ class MultitaskLearner(Model):
         if self.embedding_type == "albert":
             sp_model_file = self.albert_layer.resolved_object.sp_model_file.asset_path.numpy()
             tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
+=======
+        """prepare text input for BERT and Albert"""
+        if self.embedding_type == "bert":
+            vocab_file = self.embedding_layer.resolved_object.vocab_file.asset_path.numpy()
+            do_lower_case = self.embedding_layer.resolved_object.do_lower_case.numpy()
+            tokenizer = bert.bert_tokenization.FullTokenizer(vocab_file, do_lower_case)
+        elif self.embedding_type == "albert":
+            sp_model_file = self.embedding_layer.resolved_object.sp_model_file.asset_path.numpy()
+            tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
+
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
         input_ids, input_masks, input_segments = [], [], []
 
         for s in data:
@@ -329,11 +356,15 @@ class MultitaskLearner(Model):
         return input_ids
 
     def create_dataset(self, text, labels, sections, worthiness, ids=None, mask=None, segments=None):
-        if self.embedding_type == "lstm":
+        if self.embedding_type in "lstm":
             dataset = tf.data.Dataset.from_tensor_slices(
                 (text, {"dense": labels, "dense_1": sections, "dense_2": worthiness})
             )
+<<<<<<< HEAD
         elif self.embedding_type == "bert" or self.embedding_type == "albert":
+=======
+        elif self.embedding_type in ["bert", "albert"]:
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
             dataset = tf.data.Dataset.from_tensor_slices(
                 (
                     {
@@ -357,7 +388,11 @@ class MultitaskLearner(Model):
     def create_dev_dataset(self, text, labels, ids=None, mask=None, segments=None):
         if self.embedding_type == "lstm":
             dataset = tf.data.Dataset.from_tensor_slices((text, {"dense": labels}))
+<<<<<<< HEAD
         elif self.embedding_type == "bert" or self.embedding_type == "albert":
+=======
+        elif self.embedding_type in ["bert", "albert"]:
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
             dataset = tf.data.Dataset.from_tensor_slices(
             (
                 {
@@ -405,9 +440,14 @@ class SingletaskLearner(Model):
 
         if self.embedding_type == "elmo":
             print("Loading ELMo embedding...")
-            self.elmo_layer = hub.KerasLayer("https://tfhub.dev/google/elmo/3", signature="tokens", output_key="elmo", trainable=False)
+            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/google/elmo/3", signature="tokens", output_key="elmo", trainable=False)
         elif self.embedding_type == "bert":
-            self.bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
+            # self.bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
+            #                 trainable=False)
+            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_cased_L-12_H-768_A-12/1",
+                            trainable=False)
+        elif self.embedding_type == "albert":
+            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
                             trainable=True)
         elif self.embedding_type == "albert":
             self.albert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
@@ -457,9 +497,19 @@ class SingletaskLearner(Model):
             else:
                 state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
                 
+<<<<<<< HEAD
         elif self.embedding_type == "bert" or self.embedding_type == "albert":
             self.bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
                             trainable=True)
+=======
+        elif self.embedding_type in ["bert", "albert"]:
+            # if self.embedding_type == "bert":
+            #     self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
+            #                     trainable=True)
+            # else:
+            #     self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
+            #                   trainable=True)
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
 
             input_word_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                                name="input_word_ids")
@@ -467,8 +517,9 @@ class SingletaskLearner(Model):
                                             name="input_mask")
             segment_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                                 name="segment_ids")
-            pooled_output, sequence_output = self.bert_layer([input_word_ids, input_mask, segment_ids])
+            pooled_output, sequence_output = self.embedding_layer([input_word_ids, input_mask, segment_ids])
 
+<<<<<<< HEAD
             state_h = pooled_output
 
         elif self.embedding_type == "albert":
@@ -480,6 +531,9 @@ class SingletaskLearner(Model):
                                                 name="segment_ids")
             pooled_output, sequence_output = self.albert_layer([input_word_ids, input_mask, segment_ids])
             state_h = pooled_output
+=======
+            state_h = pooled_output            
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
         
         elif self.embedding_type == "elmo":
             text_input_layer = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype="string")
@@ -512,7 +566,7 @@ class SingletaskLearner(Model):
                 inputs=text_input_layer,
                 outputs=label_output
             )
-        elif self.embedding_type == "bert":
+        elif self.embedding_type in ["bert", "albert"]:
             self.model = tf.keras.Model(
                 inputs=[input_word_ids, input_mask, segment_ids],
                 outputs=label_output
@@ -613,6 +667,7 @@ class SingletaskLearner(Model):
         return tensor
 
     def prepare_input_data(self, data):
+<<<<<<< HEAD
         """prepare text input for BERT"""
         if self.embedding_type == "bert":
             vocab_file = self.bert_layer.resolved_object.vocab_file.asset_path.numpy()
@@ -621,6 +676,17 @@ class SingletaskLearner(Model):
         if self.embedding_type == "albert":
             sp_model_file = self.albert_layer.resolved_object.sp_model_file.asset_path.numpy()
             tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
+=======
+        """prepare text input for BERT and Albert"""
+        if self.embedding_type == "bert":
+            vocab_file = self.embedding_layer.resolved_object.vocab_file.asset_path.numpy()
+            do_lower_case = self.embedding_layer.resolved_object.do_lower_case.numpy()
+            tokenizer = bert.bert_tokenization.FullTokenizer(vocab_file, do_lower_case)
+        elif self.embedding_type == "albert":
+            sp_model_file = self.embedding_layer.resolved_object.sp_model_file.asset_path.numpy()
+            tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
+
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
         input_ids, input_masks, input_segments = [], [], []
 
         for s in data:
@@ -659,9 +725,13 @@ class SingletaskLearner(Model):
 
 
     def create_dataset(self, text, labels, ids=None, mask=None, segments=None):
-        if self.embedding_type == "lstm":
+        if self.embedding_type in ["lstm", "elmo"]:
             dataset = tf.data.Dataset.from_tensor_slices((text, {"dense": labels}))
+<<<<<<< HEAD
         elif self.embedding_type == "bert" or self.embedding_type == "albert":
+=======
+        elif self.embedding_type in ["bert", "albert"]:
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
             dataset = tf.data.Dataset.from_tensor_slices(
                 (
                     {
@@ -677,9 +747,13 @@ class SingletaskLearner(Model):
         return dataset
 
     def create_dev_dataset(self, text, labels, ids=None, mask=None, segments=None):
-        if self.embedding_type == "lstm":
+        if self.embedding_type in ["lstm", "elmo"]:
             dataset = tf.data.Dataset.from_tensor_slices((text, {"dense": labels}))
+<<<<<<< HEAD
         elif self.embedding_type == "bert" or self.embedding_type == "albert":
+=======
+        elif self.embedding_type in ["bert", "albert"]:
+>>>>>>> 099de5707121df59e9a41410fd66ac1341d9c0f5
             dataset = self.create_dataset(text, labels, ids=ids, mask=mask, segments=segments)
         return dataset
 
