@@ -6,6 +6,7 @@ import tensorflow_hub as hub
 import tensorflow_addons as tfa
 from official.nlp.bert import tokenization
 
+print(tf.__version__)
 
 
 from src import evaluation
@@ -13,8 +14,8 @@ from src import evaluation
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
 BUFFER_SIZE = 11000
-albert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
-                              trainable=True)
+albert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_base/1",
+                              trainable=False)
 max_seq_length = 100  # Your choice here.
 
 
