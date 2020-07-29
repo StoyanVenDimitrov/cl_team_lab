@@ -31,8 +31,7 @@ def make_filename(config):
         elif "path" in para or "dataset" in para:
             continue
         elif para == "model_version":
-            if "/" in para:
-                para = para.replace("/", "_")
+            para = para.replace("/", "_")
         filename += f"{sep}{para}={config[para]}"
     return filename
 
