@@ -22,6 +22,9 @@ import json
 import bert
 from official.nlp.bert import tokenization
 
+print(tf.__version__)
+
+
 from src import evaluation
 from src.utils import utils
 
