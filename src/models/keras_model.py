@@ -1,24 +1,31 @@
 """NN model implementation with keras"""
-import tensorflow as tf
-from src.models.model import Model
-from tensorflow.keras import backend as K
-import tensorflow_hub as hub
-import tensorflow_addons as tfa
-from official.nlp.bert import tokenization
-from src.utils import utils
+import warnings
 import os
 
-print(tf.__version__)
+warnings.filterwarnings(
+    "ignore", category=FutureWarning
+)  # ignores warnings about future version of numpy
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
+import tensorflow as tf
+from tensorflow.python.util import deprecation
+deprecation._PRINT_DEPRECATION_WARNINGS = False
+
+from src.models.model import Model
+from tensorflow.keras import backend as K
+import tensorflow_addons as tfa
+import tensorflow_hub as hub
+from sklearn.metrics import classification_report
+from official.nlp.bert import tokenization
+import numpy as np
+import json
+import bert
+from official.nlp.bert import tokenization
 
 from src import evaluation
-
-"""Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
+from src.utils import utils
 
 BUFFER_SIZE = 11000
-albert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_base/1",
-                              trainable=False)
-max_seq_length = 100  # Your choice here.
 
 
 class MultitaskLearner(Model):
@@ -31,27 +38,40 @@ class MultitaskLearner(Model):
         # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
         self.rnn_units = int(config["rnn_units"])
-        self.atention_size = 2 * self.rnn_units
+        self.attention_size = 2 * self.rnn_units
         self.batch_size = int(config['batch_size'])
         self.number_of_epochs = int(config['number_of_epochs'])
-        self.validation_step = int(config['validation_step'])
         self.mask_value = 1  # for masking missing label
+        self.max_seq_len = int(config["max_len"])
+        self.use_attention = True if config["use_attention"] == "True" else False
+        self.validation_step = int(config['validation_step'])
         self.worthiness_weight = float(config['worthiness_weight'])
         self.section_weight = float(config['section_weight'])
 
+        self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_base/1",
+                              trainable=False)
+
         self.logdir = utils.make_logdir("keras", "Multitask", pre_config, config)
+        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
+
+        checkpoint_path = os.path.join(
+            self.logdir, os.pardir, "checkpoints/cp-{epoch:04d}.ckpt"
+        )
+        self.checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath=checkpoint_path, verbose=1, save_weights_only=True, save_freq=500
+        )
 
     def create_model(
         self, labels_size, section_size, worthiness_size
     ):
         self.labels_size, self.section_size, self.worthiness_size = labels_size+1, section_size+1, worthiness_size+1
-        input_word_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+        input_word_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                                name="input_word_ids")
-        input_mask = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+        input_mask = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                            name="input_mask")
-        segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+        segment_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                             name="segment_ids")
-        pooled_output, sequence_output = albert_layer([input_word_ids, input_mask, segment_ids])
+        pooled_output, sequence_output = self.embedding_layer([input_word_ids, input_mask, segment_ids])
         # output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
         #     tf.keras.layers.LSTM(
         #         self.rnn_units,
@@ -64,7 +84,12 @@ class MultitaskLearner(Model):
         #     sequence_output
         # )
         # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-        state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
+        
+        if self.use_attention:
+            state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
+        else:
+            state_h = sequence_output
+        # state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax", name='dense')(
             state_h
         )
@@ -75,14 +100,14 @@ class MultitaskLearner(Model):
             state_h
         )
 
-        self.our_model = tf.keras.Model(
+        self.model = tf.keras.Model(
             inputs=[input_word_ids, input_mask, segment_ids],
             outputs=[label_output, section_output, worthiness_output]
         )
 
-        self.our_model.summary()
+        self.model.summary()
         tf.keras.utils.plot_model(
-            self.our_model, to_file="multi_input_and_output_model.png", show_shapes=True
+            self.model, to_file="multi_input_and_output_model.png", show_shapes=True
         )
 
         def masked_loss_function(y_true, y_pred):
@@ -100,7 +125,7 @@ class MultitaskLearner(Model):
 
         # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
-        self.our_model.compile(
+        self.model.compile(
             optimizer='adam',
             loss=masked_loss_function,
             metrics={'dense': F1ForMultitask(num_classes=labels_size)} #, average='macro')}
@@ -116,12 +141,39 @@ class MultitaskLearner(Model):
         #             'dense_1': {section: self.section_weight for section in range(self.section_size)},
         #             'dense_2': {worth: self.worthiness_weight for worth in range(self.worthiness_size)}
         #         }
-
-        self.our_model.fit(
+        self.model.run_eagerly = True  # solves problem of converting tensor to numpy array https://github.com/tensorflow/tensorflow/issues/27519
+        self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
-            callbacks=[ValidateAfter(val_dataset, self.validation_step)]
+            callbacks=[
+                ValidateAfter(val_dataset, self.validation_step),
+                self.tensorboard_callback,
+                self.checkpoint_callback,
+            ],
         )
+
+    def eval(self, dataset, save_output=True):
+        batch_dataset = dataset.padded_batch(self.batch_size, drop_remainder=False)
+
+        preds = self.model.predict(batch_dataset)
+        y_pred = preds[0][:, 2:].argmax(1) + 2
+        y_true = [l["dense"][0].numpy() for _, l in dataset.take(-1)]
+
+        report_json = classification_report(
+            np.asarray(y_true), y_pred, labels=[2, 3, 4], output_dict=True
+        )
+        report_text = classification_report(
+            np.asarray(y_true), y_pred, labels=[2, 3, 4]
+        )
+        print(report_text)
+
+        if save_output:
+            results_path = os.path.join(self.logdir, os.pardir)
+            with open(results_path + "/results.json", "w") as f:
+                json.dump(report_json, f)
+            with open(results_path + "/results.txt", "w") as f:
+                f.write(report_text)
+            print("Saved result files results.json and results.txt to:", results_path)
 
     def prepare_output_data(self, data):
         """tokenize and encode for label, section... """
@@ -145,16 +197,16 @@ class MultitaskLearner(Model):
 
     def prepare_input_data(self, data):
         """prepare text input for BERT"""
-        sp_model_file = albert_layer.resolved_object.sp_model_file.asset_path.numpy()
+        sp_model_file = self.embedding_layer.resolved_object.sp_model_file.asset_path.numpy()
         tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
         input_ids, input_masks, input_segments = [], [], []
 
         for s in data:
             stokens = tokenizer.tokenize(s)
             stokens = ["[CLS]"] + stokens + ["[SEP]"]
-            input_ids.append(get_ids(stokens, tokenizer, max_seq_length))
-            input_masks.append(get_masks(stokens, max_seq_length))
-            input_segments.append(get_segments(stokens, max_seq_length))
+            input_ids.append(get_ids(stokens, tokenizer, self.max_seq_len))
+            input_masks.append(get_masks(stokens, self.max_seq_len))
+            input_segments.append(get_segments(stokens, self.max_seq_len))
         return input_ids, input_masks, input_segments
 
     def create_dataset(self, ids, mask, segments, labels, sections, worthiness):
@@ -188,53 +240,77 @@ class MultitaskLearner(Model):
             )
         )
         return dataset
+    
+    def save_model(self):
+        path = os.path.join(self.logdir, os.pardir, "model.h5")
+        print("Saving model to path:", path)
+        # self.model.save(path)
+        self.model.save_weights(path)
 
 
 class SingletaskLearner(Model):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
     def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
+        pre_config = config["preprocessor"]
+        config = config["singletask_trainer"]
         super().__init__(config)
-        # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
         self.rnn_units = int(config["rnn_units"])
-        self.atention_size = 2 * self.rnn_units
-        self.batch_size = int(config['batch_size'])
-        self.number_of_epochs = int(config['number_of_epochs'])
+        self.attention_size = 2 * self.rnn_units
+        self.batch_size = int(config["batch_size"])
+        self.number_of_epochs = int(config["number_of_epochs"])
         self.mask_value = 1  # for masking missing label
-        self.validation_step = int(config['validation_step'])
+        self.max_seq_len = int(config["max_len"])
+        self.use_attention = True if config["use_attention"] == "True" else False
+        self.validation_step = int(config["validation_step"])
+
+        self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_base/1",
+                              trainable=False)
+
+        self.logdir = utils.make_logdir("keras", "Multitask", pre_config, config)
+        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
+
+        checkpoint_path = os.path.join(
+            self.logdir, os.pardir, "checkpoints/cp-{epoch:04d}.ckpt"
+        )
+        self.checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath=checkpoint_path, verbose=1, save_weights_only=True, save_freq=500
+        )
 
     def create_model(
         self, labels_size
     ):
-        input_word_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+        input_word_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                                name="input_word_ids")
-        input_mask = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+        input_mask = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                            name="input_mask")
-        segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
+        segment_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                             name="segment_ids")
-        pooled_output, sequence_output = bert_layer([input_word_ids, input_mask, segment_ids])
-        output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
-            tf.keras.layers.LSTM(
-                self.rnn_units,
-                stateful=False,
-                return_sequences=True,
-                return_state=True,
-                recurrent_initializer="glorot_uniform",
-            )
-        )(
-            sequence_output
-        )
+        pooled_output, sequence_output = self.embedding_layer([input_word_ids, input_mask, segment_ids])
+        # output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
+        #     tf.keras.layers.LSTM(
+        #         self.rnn_units,
+        #         stateful=False,
+        #         return_sequences=True,
+        #         return_state=True,
+        #         recurrent_initializer="glorot_uniform",
+        #     )
+        # )(
+        #     sequence_output
+        # )
         # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-        state_h = WeirdAttention(self.atention_size)(output)
+        if self.use_attention:
+            state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
+        else:
+            state_h = sequence_output
+        # state_h = WeirdAttention(self.atention_size)(output)
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
             state_h
         )
-
         self.model = tf.keras.Model(
             inputs=[input_word_ids, input_mask, segment_ids], outputs=label_output
         )
-
         self.model.summary()
         tf.keras.utils.plot_model(
             self.model, to_file="single_input_and_output_model.png", show_shapes=True
@@ -256,63 +332,16 @@ class SingletaskLearner(Model):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
+        self.model.run_eagerly = True  # solves problem of converting tensor to numpy array https://github.com/tensorflow/tensorflow/issues/27519
         self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
-            callbacks=[ValidateAfter(val_dataset, self.validation_step)]
+            callbacks=[
+                ValidateAfter(val_dataset, self.validation_step),
+                self.tensorboard_callback,
+                self.checkpoint_callback,
+            ],
         )
-
-    def prepare_output_data(self, data):
-        """tokenize and encode for label, section... """
-        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
-
-        filtered_data = list(filter('__unknown__'.__ne__, data))
-        component_tokenizer.fit_on_texts(filtered_data)
-
-        tensor = component_tokenizer.texts_to_sequences(data)
-
-        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post')
-        return tensor, component_tokenizer
-    
-    def prepare_dev_output_data(self, data, tokenizer):
-        tensor = tokenizer.texts_to_sequences(data)
-
-        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post')
-        return tensor
-
-    def prepare_input_data(self, data):
-        """prepare text input for BERT"""
-        sp_model_file = albert_layer.resolved_object.sp_model_file.asset_path.numpy()
-        tokenizer = FullSentencePieceTokenizer(sp_model_file)
-        input_ids, input_masks, input_segments = [], [], []
-
-        for s in data:
-            stokens = tokenizer.tokenize(s)
-            stokens = ["[CLS]"] + stokens + ["[SEP]"]
-            input_ids.append(get_ids(stokens, tokenizer, max_seq_length))
-            input_masks.append(get_masks(stokens, max_seq_length))
-            input_segments.append(get_segments(stokens, max_seq_length))
-        return input_ids, input_masks, input_segments
-
-    def create_dataset(self, ids, mask, segments, labels):
-        dataset = tf.data.Dataset.from_tensor_slices(
-                (
-                    {
-                        'input_word_ids': ids,
-                        'input_mask': mask,
-                        'segment_ids': segments
-                    },
-                    {
-                        'dense': labels
-                    }
-                )
-            )
-        return dataset
-
-    def create_dev_dataset(self, ids, mask, segments, labels):
-            return self.create_dataset(ids, mask, segments, labels)
 
     def eval(self, dataset, save_output=True):
         batch_dataset = dataset.padded_batch(self.batch_size, drop_remainder=False)
@@ -336,6 +365,58 @@ class SingletaskLearner(Model):
             with open(results_path + "/results.txt", "w") as f:
                 f.write(report_text)
             print("Saved result files results.json and results.txt to:", results_path)
+
+    def prepare_output_data(self, data):
+        """tokenize and encode for label, section... """
+        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
+
+        filtered_data = list(filter('__unknown__'.__ne__, data))
+        component_tokenizer.fit_on_texts(filtered_data)
+
+        tensor = component_tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                               padding='post')
+        return tensor, component_tokenizer
+    
+    def prepare_dev_output_data(self, data, tokenizer):
+        tensor = tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                               padding='post')
+        return tensor
+
+    def prepare_input_data(self, data):
+        """prepare text input for BERT"""
+        sp_model_file = self.embedding_layer.resolved_object.sp_model_file.asset_path.numpy()
+        tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
+        input_ids, input_masks, input_segments = [], [], []
+
+        for s in data:
+            stokens = tokenizer.tokenize(s)
+            stokens = ["[CLS]"] + stokens + ["[SEP]"]
+            input_ids.append(get_ids(stokens, tokenizer, self.max_seq_len))
+            input_masks.append(get_masks(stokens, self.max_seq_len))
+            input_segments.append(get_segments(stokens, self.max_seq_len))
+        return input_ids, input_masks, input_segments
+
+    def create_dataset(self, ids, mask, segments, labels):
+        dataset = tf.data.Dataset.from_tensor_slices(
+                (
+                    {
+                        'input_word_ids': ids,
+                        'input_mask': mask,
+                        'segment_ids': segments
+                    },
+                    {
+                        'dense': labels
+                    }
+                )
+            )
+        return dataset
+
+    def create_dev_dataset(self, ids, mask, segments, labels):
+            return self.create_dataset(ids, mask, segments, labels)
 
     def save_model(self):
         path = os.path.join(self.logdir, os.pardir, "model.h5")
@@ -374,15 +455,16 @@ def get_ids(tokens, tokenizer, max_seq_length):
 
 class WeirdAttention(tf.keras.layers.Layer):
     """attention as in Cohan et al., 2019"""
+
     def __init__(self, units):
         super(WeirdAttention, self).__init__()
         self.units = units
-        self.w = self.add_weight(shape=(self.units, 1),
-                                 initializer='random_normal',
-                                 trainable=True)
 
-    # TODO: strictly, self.w should be added in the build():
-    # https://www.tensorflow.org/guide/keras/custom_layers_and_models#best_practice_deferring_weight_creation_until_the_shape_of_the_inputs_is_known
+    def build(self, input_shape):
+        self.w = self.add_weight(
+            shape=(self.units, 1), initializer="random_normal", trainable=True, name="w"
+        )
+
     def call(self, inputs):
         alpha_score = tf.linalg.matvec(inputs, tf.squeeze(self.w))
         alpha = K.softmax(alpha_score)

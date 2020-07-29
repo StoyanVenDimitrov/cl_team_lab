@@ -31,13 +31,17 @@ class SciciteReader:
     ... 91412
     """
 
-    def __init__(self, data_dir):
-        self.data_dir = data_dir
+    def __init__(self, config):
+        self.config = config
+        self.data_dir = config["dataset"]
         self.vocab_set = set()
         self.section_set = set()
         self.worthiness_set = set()
         self.labels_set = set()
         self.tokenizer = tfds.features.text.Tokenizer()
+        self.lemmatize = True if config["lemmatize"] == "True" else False
+        self.lowercase = True if config["lowercase"] == "True" else False
+        self.do_balance_dataset = True if config["balance_dataset"] == "True" else False
 
     def load_tdt(self):
         """
@@ -56,20 +60,48 @@ class SciciteReader:
                 tdt.append(data)
         return tdt
 
-    def load_main_task_data(self, dev=False):
+    def balance_dataset(self, dataset):
+        class_background = [t for t in dataset if t["label"] == "background"]
+        class_method = [t for t in dataset if t["label"] == "method"]
+        class_result = [t for t in dataset if t["label"] == "result"]
+
+        sample_size = min(len(class_background), len(class_method), len(class_result))
+
+        bclass0 = random.sample(class_background, sample_size)
+        bclass1 = random.sample(class_method, sample_size)
+        bclass2 = random.sample(class_result, sample_size)
+
+        bdataset = bclass0 + bclass1 + bclass2
+        random.shuffle(bdataset)
+
+        return bdataset
+
+    def load_main_task_data(self, _type):
         """Loads train data for main task"""
-        if dev:
-            file = os.path.join(self.data_dir, "dev.jsonl")
-        else:
+        if _type == "train":
             file = os.path.join(self.data_dir, "train.jsonl")
+        elif _type == "dev":
+            file = os.path.join(self.data_dir, "dev.jsonl")
+        elif _type == "test":
+            file = os.path.join(self.data_dir, "test.jsonl")
 
         with open(file, "r") as data_file:
             data = [json.loads(x) for x in list(data_file)]
+
+            # balance data
+            if self.do_balance_dataset:
+                data = self.balance_dataset(data)
+
+        if self.lemmatize:
+            key = "lemmatized_string"
+        else:
+            key = "string"
+
         for sample in data:
-            tokens = self.tokenizer.tokenize(sample["string"])
+            tokens = self.tokenizer.tokenize(sample[key])
             self.vocab_set.update(tokens)
             sample["tokens"] = tokens
-            #self.labels_set.update([sample["label"]])
+            # self.labels_set.update([sample["label"]])
             sample["relevant_key"] = "label"
             # sample["text"] = [sample["string"]]
         return data
@@ -105,8 +137,7 @@ class SciciteReader:
             sample["tokens"] = tokens
         return data
 
-    def load_data(self, for_validation=False, multitask=False):
-
+    def load_data(self, _type, multitask=False):
         data = []
 
         not_encoded_tokens = []
@@ -117,7 +148,7 @@ class SciciteReader:
 
         if multitask:
             for i, j, k in zip(
-                self.load_main_task_data(),
+                self.load_main_task_data(_type=_type),
                 self.load_scaffold("cite"),
                 self.load_scaffold("title"),
             ):
@@ -125,28 +156,35 @@ class SciciteReader:
                 data.append(j)
                 data.append(k)
         else:
-            for i in self.load_main_task_data(dev=for_validation):
+            for i in self.load_main_task_data(_type=_type):
                 data.append(i)
 
-
         for sample in data:
+            _text = ""
             if "text" in sample.keys():
-                text.append(sample['text'])
+                _text = sample["text"]
+                # text.append(sample['text'])
             elif "string" in sample.keys():
-                text.append(sample['string'])
+                _text = sample["string"]
+                # text.append(sample['string'])
+
+            if self.lowercase:
+                _text = _text.lower()
+
+            text.append(_text)
             not_encoded_tokens.append(sample["tokens"])
 
             relevant_key = sample["relevant_key"]
-            
+
             if relevant_key == "label":
-                    labels.append(sample["label"])
+                labels.append(sample["label"])
             else:
                 labels.append("__unknown__")
 
             if multitask:
                 if relevant_key == "section_title":
                     # avoid 'related work' to be tokenized with two labels
-                    sections.append(sample["section_title"].split(' ')[0])
+                    sections.append(sample["section_title"].split(" ")[0])
                 else:
                     sections.append("__unknown__")
 
