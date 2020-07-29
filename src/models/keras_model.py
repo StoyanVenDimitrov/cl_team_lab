@@ -68,6 +68,7 @@ class MultitaskLearner(KerasModel):
         super().__init__(config)
         # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
+        self.use_attention = True if config["use_attention"] == "True" else False
         self.rnn_units = int(config["rnn_units"])
         self.atention_size = 2 * self.rnn_units
         self.batch_size = int(config['batch_size'])
@@ -88,7 +89,10 @@ class MultitaskLearner(KerasModel):
         segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
                                             name="segment_ids")
         pooled_output, sequence_output = bert_layer([input_word_ids, input_mask, segment_ids])
-        state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
+        if self.use_attention:
+            state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
+        else:
+            state_h = pooled_output
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax", name='dense')(
             state_h
         )
@@ -182,6 +186,7 @@ class SingletaskLearner(KerasModel):
         super().__init__(config)
         # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
+        self.use_attention = True if config["use_attention"] == "True" else False
         self.rnn_units = int(config["rnn_units"])
         self.atention_size = 2 * self.rnn_units
         self.batch_size = int(config['batch_size'])
@@ -199,19 +204,10 @@ class SingletaskLearner(KerasModel):
         segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
                                             name="segment_ids")
         pooled_output, sequence_output = bert_layer([input_word_ids, input_mask, segment_ids])
-        output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
-            tf.keras.layers.LSTM(
-                self.rnn_units,
-                stateful=False,
-                return_sequences=True,
-                return_state=True,
-                recurrent_initializer="glorot_uniform",
-            )
-        )(
-            sequence_output
-        )
-        # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-        state_h = WeirdAttention(self.atention_size)(output)
+        if self.use_attention:
+            state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
+        else:
+            state_h = sequence_output
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
             state_h
         )
