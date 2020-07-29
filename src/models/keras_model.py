@@ -14,15 +14,57 @@ from src import evaluation
 """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
 BUFFER_SIZE = 11000
-albert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_base/1",
-                              trainable=False)
+bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1", trainable=False)
 max_seq_length = 100  # Your choice here.
 
 
-class MultitaskLearner(Model):
+class KerasModel(Model):
+    def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
+        super().__init__(config)
+
+    def prepare_output_data(self, data):
+        """tokenize and encode for label, section... """
+        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
+
+        filtered_data = list(filter('__unknown__'.__ne__, data))
+        component_tokenizer.fit_on_texts(filtered_data)
+
+        tensor = component_tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                               padding='post')
+        return tensor, component_tokenizer
+
+    def prepare_dev_output_data(self, data, tokenizer):
+        tensor = tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                               padding='post')
+        return tensor
+
+    def create_single_dataset(self, ids, mask, segments, labels):
+        dataset = tf.data.Dataset.from_tensor_slices(
+                (
+                    {
+                        'input_word_ids': ids,
+                        'input_mask': mask,
+                        'segment_ids': segments
+                    },
+                    {
+                        'dense': labels
+                    }
+                )
+            )
+        return dataset
+
+    def create_dev_dataset(self, ids, mask, segments, labels):
+            return self.create_single_dataset(ids, mask, segments, labels)
+
+
+class MultitaskLearner(KerasModel):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
-    def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
+    def __init__(self, config):
         super().__init__(config)
         # self.create_model(
         self.embedding_dim = int(config["embedding_dim"])
@@ -45,19 +87,7 @@ class MultitaskLearner(Model):
                                            name="input_mask")
         segment_ids = tf.keras.layers.Input(shape=(max_seq_length,), dtype=tf.int32,
                                             name="segment_ids")
-        pooled_output, sequence_output = albert_layer([input_word_ids, input_mask, segment_ids])
-        # output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
-        #     tf.keras.layers.LSTM(
-        #         self.rnn_units,
-        #         stateful=False,
-        #         return_sequences=True,
-        #         return_state=True,
-        #         recurrent_initializer="glorot_uniform",
-        #     )
-        # )(
-        #     sequence_output
-        # )
-        # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
+        pooled_output, sequence_output = bert_layer([input_word_ids, input_mask, segment_ids])
         state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax", name='dense')(
             state_h
@@ -102,14 +132,8 @@ class MultitaskLearner(Model):
 
     def fit_model(self, dataset, val_dataset):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
-        #val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
         val_dataset = val_dataset.padded_batch(5, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
-        # class_weight = {
-        #             'dense': {label: 1 for label in range(self.labels_size)},
-        #             'dense_1': {section: self.section_weight for section in range(self.section_size)},
-        #             'dense_2': {worth: self.worthiness_weight for worth in range(self.worthiness_size)}
-        #         }
 
         self.our_model.fit(
             dataset,
@@ -117,30 +141,12 @@ class MultitaskLearner(Model):
             callbacks=[ValidateAfter(val_dataset, self.validation_step)]
         )
 
-    def prepare_output_data(self, data):
-        """tokenize and encode for label, section... """
-        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
-
-        filtered_data = list(filter('__unknown__'.__ne__, data))
-        component_tokenizer.fit_on_texts(filtered_data)
-
-        tensor = component_tokenizer.texts_to_sequences(data)
-
-        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post')
-        return tensor, component_tokenizer
-    
-    def prepare_dev_output_data(self, data, tokenizer):
-        tensor = tokenizer.texts_to_sequences(data)
-
-        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post')
-        return tensor
 
     def prepare_input_data(self, data):
         """prepare text input for BERT"""
-        sp_model_file = albert_layer.resolved_object.sp_model_file.asset_path.numpy()
-        tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
+        vocab_file = bert_layer.resolved_object.vocab_file.asset_path.numpy()
+        do_lower_case = bert_layer.resolved_object.do_lower_case.numpy()
+        tokenizer = tokenization.FullTokenizer(vocab_file, do_lower_case)
         input_ids, input_masks, input_segments = [], [], []
 
         for s in data:
@@ -168,23 +174,8 @@ class MultitaskLearner(Model):
         )
         return dataset
 
-    def create_dev_dataset(self, ids, mask, segments, labels):
-        dataset = tf.data.Dataset.from_tensor_slices(
-            (
-                {
-                    'input_word_ids': ids,
-                    'input_mask': mask,
-                    'segment_ids': segments
-                },
-                {
-                    'dense': labels
-                }
-            )
-        )
-        return dataset
 
-
-class SingletaskLearner(Model):
+class SingletaskLearner(KerasModel):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
     def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
@@ -256,30 +247,11 @@ class SingletaskLearner(Model):
             callbacks=[ValidateAfter(val_dataset, self.validation_step)]
         )
 
-    def prepare_output_data(self, data):
-        """tokenize and encode for label, section... """
-        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
-
-        filtered_data = list(filter('__unknown__'.__ne__, data))
-        component_tokenizer.fit_on_texts(filtered_data)
-
-        tensor = component_tokenizer.texts_to_sequences(data)
-
-        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post')
-        return tensor, component_tokenizer
-    
-    def prepare_dev_output_data(self, data, tokenizer):
-        tensor = tokenizer.texts_to_sequences(data)
-
-        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                               padding='post')
-        return tensor
-
     def prepare_input_data(self, data):
         """prepare text input for BERT"""
-        sp_model_file = albert_layer.resolved_object.sp_model_file.asset_path.numpy()
-        tokenizer = FullSentencePieceTokenizer(sp_model_file)
+        vocab_file = bert_layer.resolved_object.vocab_file.asset_path.numpy()
+        do_lower_case = bert_layer.resolved_object.do_lower_case.numpy()
+        tokenizer = tokenization.FullTokenizer(vocab_file, do_lower_case)
         input_ids, input_masks, input_segments = [], [], []
 
         for s in data:
@@ -291,22 +263,8 @@ class SingletaskLearner(Model):
         return input_ids, input_masks, input_segments
 
     def create_dataset(self, ids, mask, segments, labels):
-        dataset = tf.data.Dataset.from_tensor_slices(
-                (
-                    {
-                        'input_word_ids': ids,
-                        'input_mask': mask,
-                        'segment_ids': segments
-                    },
-                    {
-                        'dense': labels
-                    }
-                )
-            )
-        return dataset
+            return self.create_single_dataset(ids, mask, segments, labels)
 
-    def create_dev_dataset(self, ids, mask, segments, labels):
-            return self.create_dataset(ids, mask, segments, labels)
 
 def get_masks(tokens, max_seq_length):
     """Mask for padding"""
