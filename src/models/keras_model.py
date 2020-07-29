@@ -75,24 +75,11 @@ class MultitaskLearner(Model):
         segment_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                             name="segment_ids")
         pooled_output, sequence_output = self.embedding_layer([input_word_ids, input_mask, segment_ids])
-        # output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
-        #     tf.keras.layers.LSTM(
-        #         self.rnn_units,
-        #         stateful=False,
-        #         return_sequences=True,
-        #         return_state=True,
-        #         recurrent_initializer="glorot_uniform",
-        #     )
-        # )(
-        #     sequence_output
-        # )
-        # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-        
+
         if self.use_attention:
             state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
         else:
             state_h = sequence_output
-        # state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax", name='dense')(
             state_h
         )
@@ -126,24 +113,16 @@ class MultitaskLearner(Model):
                 K.clip(y_pred * mask, min_value=1e-15, max_value=1e10)
             )
 
-        # masked_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-
         self.model.compile(
             optimizer='adam',
             loss=masked_loss_function,
-            metrics={'dense': F1ForMultitask(num_classes=labels_size)} #, average='macro')}
+            metrics={'dense': F1ForMultitask(num_classes=labels_size)}
         )
 
     def fit_model(self, dataset, val_dataset):
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
-        #val_batch_size = tf.data.experimental.cardinality(val_dataset).numpy()
         val_dataset = val_dataset.padded_batch(5, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
-        # class_weight = {
-        #             'dense': {label: 1 for label in range(self.labels_size)},
-        #             'dense_1': {section: self.section_weight for section in range(self.section_size)},
-        #             'dense_2': {worth: self.worthiness_weight for worth in range(self.worthiness_size)}
-        #         }
         self.model.run_eagerly = True  # solves problem of converting tensor to numpy array https://github.com/tensorflow/tensorflow/issues/27519
         self.model.fit(
             dataset,
@@ -291,23 +270,10 @@ class SingletaskLearner(Model):
         segment_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                             name="segment_ids")
         pooled_output, sequence_output = self.embedding_layer([input_word_ids, input_mask, segment_ids])
-        # output, forward_h, forward_c, backward_h, backward_c = tf.keras.layers.Bidirectional(
-        #     tf.keras.layers.LSTM(
-        #         self.rnn_units,
-        #         stateful=False,
-        #         return_sequences=True,
-        #         return_state=True,
-        #         recurrent_initializer="glorot_uniform",
-        #     )
-        # )(
-        #     sequence_output
-        # )
-        # state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
         if self.use_attention:
             state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
         else:
             state_h = sequence_output
-        # state_h = WeirdAttention(self.atention_size)(output)
         label_output = tf.keras.layers.Dense(labels_size+1, activation="softmax")(
             state_h
         )
