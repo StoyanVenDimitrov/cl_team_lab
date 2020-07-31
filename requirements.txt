@@ -1,12 +1,12 @@
 jsonlines==1.2.0
-tf-models-official==2.3.0
+tf-models-official==2.2.1
 tensorflow-addons==0.10.0
 tensorflow-datasets==3.2.1
 tensorflow-hub==0.8.0
-tensorflow==2.3.0
+tensorflow==2.2.0
 nltk==3.5
 spacy==2.3.2
-pandas==1.1.0
+pandas==1.0.5
 mlflow==1.10.0
 scikit-learn==0.23.1
 bert-for-tf2==0.14.5
@@ -14,6 +14,8 @@ pydot==1.4.1
 torch==1.6.0
 torchvision==0.7.0
 transformers==3.0.2
+scipy==1.4.1
+urllib3==1.24.0
 pytorch-model-summary==0.1.1
 git+git://github.com/huggingface/nlp
 en-core-sci-lg @ https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.2.5/en_core_sci_lg-0.2.5.tar.gz
