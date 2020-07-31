@@ -179,7 +179,7 @@ class SciciteReader:
         return bdataset
 
     def load_main_task_data(self, _type):
-        """Loads train data for main task"""
+        """Loads train data for main task, no scaffolds"""
         if _type == "train":
             file = os.path.join(self.data_dir, "train.jsonl")
         elif _type == "dev":
@@ -251,6 +251,12 @@ class SciciteReader:
         return data
 
     def load_data(self, _type, multitask=False):
+        """
+        load data as needed:
+        :param _type:
+        :param multitask: load also auxiliary tasks if True
+        :return lists for text and respective class at labels, sections, worthiness
+        """
         data = []
 
         not_encoded_tokens = []

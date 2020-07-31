@@ -5,12 +5,24 @@ import os
 
 
 def load_config(path):
+    """
+    create readable config object
+    :param path: config file path
+    :return: config object
+    """
     config = configparser.ConfigParser()
     config.read(path)
     return config
 
 
 def write_config(path, config1, config2):
+    """
+    join two configs
+    :param path: where to write
+    :param config1:
+    :param config2:
+    :return: joint config
+    """
     with open(os.path.join(path, os.pardir, "config.txt"), "w") as f:
         f.write("[param]\n")
         for c in [config1, config2]:
@@ -56,6 +68,11 @@ def make_logdir(dir, _type, config1, config2):
 
 
 def import_module(dotted_path):
+    """
+    import module from config ready to create object
+    :param dotted_path: module path
+    :return: imported model
+    """
     module_parts = dotted_path.split(".")
     module_path = ".".join(module_parts[:-1])
     try:

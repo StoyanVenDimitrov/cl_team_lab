@@ -13,11 +13,18 @@ import datetime
 
 
 class Trainer:
+    """
+    Trainer class for the keras implementation
+    """
     def __init__(self, args, config):
         self.args = args
         self.config = config
 
     def keras_multitask(self, args):
+        """
+        run the keras implementation with multi-task objective
+        :return:
+        """
         start_time = time.time()
 
         # if self.args.log_metrics:
@@ -126,6 +133,11 @@ class Trainer:
         print("Execution time:", str(datetime.timedelta(seconds=total_time)))
 
     def keras_singletask(self, args):
+        """
+        run the keras implementation with cross entropy
+        :return:
+        """
+
         start_time = time.time()
 
         # if self.args.log_metrics:

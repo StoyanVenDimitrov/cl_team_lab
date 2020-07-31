@@ -16,20 +16,19 @@ from tensorflow.keras import backend as K
 import tensorflow_addons as tfa
 import tensorflow_hub as hub
 from sklearn.metrics import classification_report
-from official.nlp.bert import tokenization
 import numpy as np
 import json
 import bert
 from official.nlp.bert import tokenization
 
-from src import evaluation
 from src.utils import utils
 
 BUFFER_SIZE = 11000
 
 
 class MultitaskLearner(Model):
-    """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
+    """Multitask learning environment for citation classification (main task) and citation section title /
+     citation worthiness (auxiliary)"""
 
     def __init__(
         self, config
@@ -371,7 +370,7 @@ class MultitaskLearner(Model):
 
 
 class SingletaskLearner(Model):
-    """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
+    """Multitask learning environment for citation classification (main task) only"""
 
     def __init__(
         self, config
@@ -449,13 +448,6 @@ class SingletaskLearner(Model):
                 state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
                 
         elif self.embedding_type in ["bert", "albert"]:
-            # if self.embedding_type == "bert":
-            #     self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
-            #                     trainable=True)
-            # else:
-            #     self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
-            #                   trainable=True)
-
             input_word_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                                name="input_word_ids")
             input_mask = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
@@ -490,8 +482,6 @@ class SingletaskLearner(Model):
             state_h
         )
 
-
-
         if self.embedding_type == "lstm":
             self.model = tf.keras.Model(
                 inputs=text_input_layer,
@@ -514,8 +504,6 @@ class SingletaskLearner(Model):
                 inputs=text_input_layer,
                 outputs=label_output
             )
-
-        # self.model = tf.keras.Model(inputs=text_input_layer, outputs=label_output)
 
         self.model.summary()
         tf.keras.utils.plot_model(
@@ -548,7 +536,7 @@ class SingletaskLearner(Model):
                 ValidateAfter(val_dataset, self.validation_step),
             #     self.tensorboard_callback,
             #     self.checkpoint_callback,
-            # ],
+            ],
         )
 
     def eval(self, dataset, save_output=True):
