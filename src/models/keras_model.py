@@ -14,28 +14,108 @@ from tensorflow.keras import backend as K
 import tensorflow_addons as tfa
 import tensorflow_hub as hub
 from sklearn.metrics import classification_report
-from official.nlp.bert import tokenization
 import numpy as np
 import json
 import bert
 from official.nlp.bert import tokenization
 
-from src import evaluation
 from src.utils import utils
 
 BUFFER_SIZE = 11000
 
+class KerasModel(Model):
+    def __init__(self, config):#, vocab_size, labels_size, section_size, worthiness_size):
+        super().__init__(config)
 
-class MultitaskLearner(Model):
+    def prepare_output_data(self, data):
+        """tokenize and encode for label, section... """
+        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
+
+        filtered_data = list(filter('__unknown__'.__ne__, data))
+        component_tokenizer.fit_on_texts(filtered_data)
+
+        tensor = component_tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                               padding='post')
+        return tensor, component_tokenizer
+
+    def prepare_dev_data(self, data, tokenizer, max_len=None):
+        tensor = tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor, padding="post")
+        if max_len:
+            tensor = tensor[:, :max_len]
+        return tensor
+
+    def prepare_data(self, data, max_len=None):
+        """tokenize and encode for text, label, section... """
+        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
+
+        filtered_data = list(filter("__unknown__".__ne__, data))
+        component_tokenizer.fit_on_texts(filtered_data)
+
+        tensor = component_tokenizer.texts_to_sequences(data)
+
+        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor, padding="post")
+        if max_len:
+            tensor = tensor[:, :max_len]
+        # TODO: pad batches, not the whole set
+        return tensor, component_tokenizer
+
+    def prepare_input_data(self, data):
+        """prepare text input for BERT"""
+        if self.embedding_type == "bert":
+            vocab_file = self.embedding_layer.resolved_object.vocab_file.asset_path.numpy()
+            do_lower_case = self.embedding_layer.resolved_object.do_lower_case.numpy()
+            tokenizer = tokenization.FullTokenizer(vocab_file, do_lower_case)
+
+        elif self.embedding_type == "albert":
+            sp_model_file = self.embedding_layer.resolved_object.sp_model_file.asset_path.numpy()
+            tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
+
+        input_ids, input_masks, input_segments = [], [], []
+
+        for s in data:
+            stokens = tokenizer.tokenize(s)
+            stokens = ["[CLS]"] + stokens + ["[SEP]"]
+            input_ids.append(get_ids(stokens, tokenizer, self.max_seq_len))
+            input_masks.append(get_masks(stokens, self.max_seq_len))
+            input_segments.append(get_segments(stokens, self.max_seq_len))
+        return input_ids, input_masks, input_segments
+
+    def create_single_dataset(self, text, ids, mask, segments, labels):
+        if self.embedding_type == 'lstm':
+            dataset = tf.data.Dataset.from_tensor_slices((text, {"dense": labels}))
+        elif self.embedding_type in ["bert", "albert"]:
+            dataset = tf.data.Dataset.from_tensor_slices(
+                    (
+                        {
+                            'input_word_ids': ids,
+                            'input_mask': mask,
+                            'segment_ids': segments
+                        },
+                        {
+                            'dense': labels
+                        }
+                    )
+                )
+        return dataset
+
+    def create_dev_dataset(self, text, ids, mask, segments, labels):
+        if self.embedding_type in ["bert", "albert"]:
+            return self.create_single_dataset(text=None, ids=ids, mask=mask, segments=segments, labels=labels)
+        if self.embedding_type == 'lstm':
+            return self.create_single_dataset(text=text, ids=None, mask=None, segments=None, labels=labels)
+
+
+class MultitaskLearner(KerasModel):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
-    def __init__(
-        self, config
-    ):  # , vocab_size, labels_size, section_size, worthiness_size):
-        pre_config = config["preprocessor"]
-        config = config["multitask_trainer"]
+    def __init__(self, config):
         super().__init__(config)
         self.embedding_dim = int(config["embedding_dim"])
+        self.use_attention = True if config["use_attention"] == "True" else False
         self.rnn_units = int(config["rnn_units"])
         self.attention_size = 2 * self.rnn_units
         self.batch_size = int(config["batch_size"])
@@ -109,7 +189,7 @@ class MultitaskLearner(Model):
                 state_h = WeirdAttention(self.attention_size)(output)
             else:
                 state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-                
+
         elif self.embedding_type in ["bert", "albert"]:
 
             input_word_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
@@ -153,7 +233,7 @@ class MultitaskLearner(Model):
         worthiness_output = tf.keras.layers.Dense(
             worthiness_size + 1, activation="softmax", name="dense_2"
         )(state_h)
-        
+
         if self.embedding_type == "lstm":
             self.model = tf.keras.Model(
                 inputs=text_input_layer,
@@ -179,6 +259,11 @@ class MultitaskLearner(Model):
         def _masked_loss_function(y_true, y_pred):
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
             y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
+            # compare y_v len to find out the current type of labels and output the loss coeff or 1:
+            section_loss_weight = K.switch(K.equal(y_v.shape[1], self.section_size), self.section_weight, 1.0)
+            worthiness_loss_weight = K.switch(K.equal(y_v.shape[1], self.worthiness_size), self.worthiness_weight, 1.0)
+            # update the mask to scale with the needed factor:
+            mask = mask * section_loss_weight * worthiness_loss_weight
             return K.categorical_crossentropy(
                 y_v * mask, K.clip(y_pred * mask, min_value=1e-15, max_value=1e10)
             )
@@ -245,76 +330,7 @@ class MultitaskLearner(Model):
                 f.write(report_text)
             print("Saved result files results.json and results.txt to:", results_path)
 
-    def prepare_data(self, data, max_len=None):
-        """tokenize and encode for text, label, section... """
-        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
-
-        filtered_data = list(filter("__unknown__".__ne__, data))
-        component_tokenizer.fit_on_texts(filtered_data)
-
-        tensor = component_tokenizer.texts_to_sequences(data)
-
-        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor, padding="post")
-        if max_len:
-            tensor = tensor[:, :max_len]
-        # TODO: pad batches, not the whole set
-        return tensor, component_tokenizer
-
-    def prepare_dev_data(self, data, tokenizer, max_len=None):
-        tensor = tokenizer.texts_to_sequences(data)
-
-        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor, padding="post")
-        if max_len:
-            tensor = tensor[:, :max_len]
-        return tensor
-
-    def prepare_input_data(self, data):
-        """prepare text input for BERT and Albert"""
-        if self.embedding_type == "bert":
-            vocab_file = self.embedding_layer.resolved_object.vocab_file.asset_path.numpy()
-            do_lower_case = self.embedding_layer.resolved_object.do_lower_case.numpy()
-            tokenizer = bert.bert_tokenization.FullTokenizer(vocab_file, do_lower_case)
-        elif self.embedding_type == "albert":
-            sp_model_file = self.embedding_layer.resolved_object.sp_model_file.asset_path.numpy()
-            tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
-
-        input_ids, input_masks, input_segments = [], [], []
-
-        for s in data:
-            stokens = tokenizer.tokenize(s)
-            stokens = ["[CLS]"] + stokens + ["[SEP]"]
-            input_ids.append(self.get_ids(stokens, tokenizer))
-            input_masks.append(self.get_masks(stokens))
-            input_segments.append(self.get_segments(stokens))
-        return input_ids, input_masks, input_segments
-
-    def get_masks(self, tokens):
-        """Mask for padding"""
-        if len(tokens)>self.max_seq_len:
-            return [1] * self.max_seq_len
-        return [1]*len(tokens) + [0] * (self.max_seq_len - len(tokens))
-
-    def get_segments(self, tokens):
-        """Segments: 0 for the first sequence, 1 for the second"""
-        segments = []
-        current_segment_id = 0
-        if len(tokens) > self.max_seq_len:
-            return [0]*self.max_seq_len
-        for token in tokens:
-            segments.append(current_segment_id)
-            if token == "[SEP]":
-                current_segment_id = 1
-        return segments + [0] * (self.max_seq_len - len(tokens))
-
-    def get_ids(self, tokens, tokenizer):
-        """Token ids from Tokenizer vocab"""
-        token_ids = tokenizer.convert_tokens_to_ids(tokens)
-        if len(tokens) > self.max_seq_len:
-            return token_ids[:self.max_seq_len]
-        input_ids = token_ids + [0] * (self.max_seq_len-len(token_ids))
-        return input_ids
-
-    def create_dataset(self, text, labels, sections, worthiness, ids=None, mask=None, segments=None):
+    def create_dataset(self, text, labels, sections, worthiness, ids, mask, segments):
         if self.embedding_type in "lstm":
             dataset = tf.data.Dataset.from_tensor_slices(
                 (text, {"dense": labels, "dense_1": sections, "dense_2": worthiness})
@@ -329,38 +345,13 @@ class MultitaskLearner(Model):
                     },
                     {
                         'dense': labels,
-                        # 'dense_1': sections,
-                        # 'dense_2': worthiness
+                        'dense_1': sections,
+                        'dense_2': worthiness
                     }
                 )
             )
-        elif self.embedding_type == "elmo":
-            dataset = tf.data.Dataset.from_tensor_slices(
-                (text, {"dense": labels, "dense_1": sections, "dense_2": worthiness})
-            )
         return dataset
 
-    def create_dev_dataset(self, text, labels, ids=None, mask=None, segments=None):
-        if self.embedding_type == "lstm":
-            dataset = tf.data.Dataset.from_tensor_slices((text, {"dense": labels}))
-        elif self.embedding_type in ["bert", "albert"]:
-            dataset = tf.data.Dataset.from_tensor_slices(
-            (
-                {
-                    'input_word_ids': ids,
-                    'input_mask': mask,
-                    'segment_ids': segments
-                },
-                {
-                    'dense': labels
-                }
-            )
-        )
-        elif self.embedding_type == "elmo":
-            dataset = tf.data.Dataset.from_tensor_slices((text, {"dense": labels}))
-        return dataset
-
-    # TODO model.save throws error https://github.com/tensorflow/tensorflow/issues/26811
     def save_model(self):
         path = os.path.join(self.logdir, os.pardir, "model.h5")
         print("Saving model to path:", path)
@@ -368,7 +359,7 @@ class MultitaskLearner(Model):
         self.model.save_weights(path)
 
 
-class SingletaskLearner(Model):
+class SingletaskLearner(KerasModel):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
     def __init__(
@@ -378,6 +369,7 @@ class SingletaskLearner(Model):
         config = config["singletask_trainer"]
         super().__init__(config)
         self.embedding_dim = int(config["embedding_dim"])
+        self.use_attention = True if config["use_attention"] == "True" else False
         self.rnn_units = int(config["rnn_units"])
         self.attention_size = 2 * self.rnn_units
         self.batch_size = int(config["batch_size"])
@@ -416,7 +408,7 @@ class SingletaskLearner(Model):
         return self.elmo_layer(inputs={"tokens": tf.squeeze(tf.cast(x, tf.string)), "sequence_len": tf.constant(int(self.batch_size)*[self.max_seq_len])})
 
     def create_model(self, vocab_size, labels_size):
-        
+
         if self.embedding_type == "lstm":
             text_input_layer = tf.keras.Input(shape=(None,), dtype=tf.int32, name="Input_1")
             embeddings_layer = tf.keras.layers.Embedding(
@@ -445,9 +437,8 @@ class SingletaskLearner(Model):
                 state_h = WeirdAttention(self.attention_size)(output)
             else:
                 state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-                
-        elif self.embedding_type in ["bert", "albert"]:
 
+        elif self.embedding_type in ["bert", "albert"]:
             input_word_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                                name="input_word_ids")
             input_mask = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
@@ -456,8 +447,8 @@ class SingletaskLearner(Model):
                                                 name="segment_ids")
             pooled_output, sequence_output = self.embedding_layer([input_word_ids, input_mask, segment_ids])
 
-            state_h = pooled_output            
-        
+            state_h = pooled_output
+
         elif self.embedding_type == "elmo":
             text_input_layer = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype="string")
             input_embedding = tf.keras.layers.Lambda(self.elmo_embedding, output_shape=(self.max_seq_len, 1024))(text_input_layer)
@@ -477,7 +468,7 @@ class SingletaskLearner(Model):
                 state_h = WeirdAttention(self.attention_size)(output)
             else:
                 state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
-        
+
         label_output = tf.keras.layers.Dense(labels_size + 1, activation="softmax")(
             state_h
         )
@@ -553,7 +544,6 @@ class SingletaskLearner(Model):
             np.asarray(y_true), y_pred, labels=[2, 3, 4]
         )
         print(report_text)
-
         if save_output:
             results_path = os.path.join(self.logdir, os.pardir)
             with open(results_path + "/results.json", "w") as f:
@@ -562,107 +552,46 @@ class SingletaskLearner(Model):
                 f.write(report_text)
             print("Saved result files results.json and results.txt to:", results_path)
 
-    def prepare_data(self, data, max_len=None):
-        """tokenize and encode for text, label, section... """
-        component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
+    def create_dataset(self, text, ids, mask, segments, labels):
+        if self.embedding_type in ["bert", "albert"]:
+            return self.create_single_dataset(text=None, ids=ids, mask=mask, segments=segments, labels=labels)
+        if self.embedding_type == 'lstm':
+            return self.create_single_dataset(text=text, ids=None, mask=None, segments=None, labels=labels)
 
-        filtered_data = list(filter("__unknown__".__ne__, data))
-        component_tokenizer.fit_on_texts(filtered_data)
-
-        tensor = component_tokenizer.texts_to_sequences(data)
-
-        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor, padding="post")
-        if max_len:
-            tensor = tensor[:, :max_len]
-        # TODO: pad batches, not the whole set
-        return tensor, component_tokenizer
-
-    def prepare_dev_data(self, data, tokenizer, max_len=None):
-        tensor = tokenizer.texts_to_sequences(data)
-
-        tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor, padding="post")
-        if max_len:
-            tensor = tensor[:, :max_len]
-        return tensor
-
-    def prepare_input_data(self, data):
-        """prepare text input for BERT and Albert"""
-        if self.embedding_type == "bert":
-            vocab_file = self.embedding_layer.resolved_object.vocab_file.asset_path.numpy()
-            do_lower_case = self.embedding_layer.resolved_object.do_lower_case.numpy()
-            tokenizer = bert.bert_tokenization.FullTokenizer(vocab_file, do_lower_case)
-        elif self.embedding_type == "albert":
-            sp_model_file = self.embedding_layer.resolved_object.sp_model_file.asset_path.numpy()
-            tokenizer = tokenization.FullSentencePieceTokenizer(sp_model_file)
-
-        input_ids, input_masks, input_segments = [], [], []
-
-        for s in data:
-            stokens = tokenizer.tokenize(s)
-            stokens = ["[CLS]"] + stokens + ["[SEP]"]
-            input_ids.append(self.get_ids(stokens, tokenizer))
-            input_masks.append(self.get_masks(stokens))
-            input_segments.append(self.get_segments(stokens))
-        return input_ids, input_masks, input_segments
-
-    def get_masks(self, tokens):
-        """Mask for padding"""
-        if len(tokens)>self.max_seq_len:
-            return [1] * self.max_seq_len
-        return [1]*len(tokens) + [0] * (self.max_seq_len - len(tokens))
-
-    def get_segments(self, tokens):
-        """Segments: 0 for the first sequence, 1 for the second"""
-        segments = []
-        current_segment_id = 0
-        if len(tokens) > self.max_seq_len:
-            return [0]*self.max_seq_len
-        for token in tokens:
-            segments.append(current_segment_id)
-            if token == "[SEP]":
-                current_segment_id = 1
-        return segments + [0] * (self.max_seq_len - len(tokens))
-
-    def get_ids(self, tokens, tokenizer):
-        """Token ids from Tokenizer vocab"""
-        token_ids = tokenizer.convert_tokens_to_ids(tokens)
-        if len(tokens) > self.max_seq_len:
-            return token_ids[:self.max_seq_len]
-        input_ids = token_ids + [0] * (self.max_seq_len-len(token_ids))
-        return input_ids
-
-
-    def create_dataset(self, text, labels, ids=None, mask=None, segments=None):
-        if self.embedding_type in ["lstm", "elmo"]:
-            dataset = tf.data.Dataset.from_tensor_slices((text, {"dense": labels}))
-        elif self.embedding_type in ["bert", "albert"]:
-            dataset = tf.data.Dataset.from_tensor_slices(
-                (
-                    {
-                        'input_word_ids': ids,
-                        'input_mask': mask,
-                        'segment_ids': segments
-                    },
-                    {
-                        'dense': labels
-                    }
-                )
-            )
-        return dataset
-
-    def create_dev_dataset(self, text, labels, ids=None, mask=None, segments=None):
-        if self.embedding_type in ["lstm", "elmo"]:
-            dataset = tf.data.Dataset.from_tensor_slices((text, {"dense": labels}))
-        elif self.embedding_type in ["bert", "albert"]:
-            dataset = self.create_dataset(text, labels, ids=ids, mask=mask, segments=segments)
-        return dataset
-
-    # TODO model.save throws error https://github.com/tensorflow/tensorflow/issues/26811
     def save_model(self):
         path = os.path.join(self.logdir, os.pardir, "model.h5")
         print("Saving model to path:", path)
         # self.model.save(path)
         self.model.save_weights(path)
+
+
+def get_masks(tokens, max_seq_length):
+    """Mask for padding"""
+    if len(tokens)>max_seq_length:
+        return [1] * max_seq_length
+    return [1]*len(tokens) + [0] * (max_seq_length - len(tokens))
+
+
+def get_segments(tokens, max_seq_length):
+    """Segments: 0 for the first sequence, 1 for the second"""
+    segments = []
+    current_segment_id = 0
+    if len(tokens) > max_seq_length:
+        return [0]*max_seq_length
+    for token in tokens:
+        segments.append(current_segment_id)
+        if token == "[SEP]":
+            current_segment_id = 1
+    return segments + [0] * (max_seq_length - len(tokens))
+
+
+def get_ids(tokens, tokenizer, max_seq_length):
+    """Token ids from Tokenizer vocab"""
+    token_ids = tokenizer.convert_tokens_to_ids(tokens)
+    if len(tokens) > max_seq_length:
+        return token_ids[:max_seq_length]
+    input_ids = token_ids + [0] * (max_seq_length-len(token_ids))
+    return input_ids
 
 
 class WeirdAttention(tf.keras.layers.Layer):

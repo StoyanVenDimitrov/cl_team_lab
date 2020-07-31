@@ -114,19 +114,3 @@ def dev_labels(filename):
         for obj in reader:
             labels.append(obj["label"])
     return labels
-
-
-# from sklearn.metrics import f1_score
-# label_list = dev_labels("data/scicite/dev.jsonl")
-# pred_list = ["background"] * len(label_list)
-# macro_f1 = custom_macro_f1_score(label_list, pred_list)
-# sk_macro_f1 = f1_score(label_list, pred_list, average="macro")
-# print("Macro F1:", macro_f1)
-# micro_f1 = custom_micro_f1_score(label_list, pred_list)
-# sk_micro_f1 = f1_score(label_list, pred_list, average="micro")
-# print("Micro F1:", micro_f1)
-#
-# if micro_f1 == sk_micro_f1 and macro_f1 == sk_macro_f1:
-#     print("Both scores seem to be true")
-# else:
-#     print("Scores dont correspond to the sklearn F1 scores")
