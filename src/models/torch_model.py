@@ -6,6 +6,7 @@ from transformers import BertConfig, BertTokenizer, BertForSequenceClassificatio
 from tqdm import trange, tqdm
 from sklearn.metrics import f1_score, accuracy_score, classification_report
 from src.utils import utils
+from pytorch_model_summary import summary
 # import wandb
 # wandb.init(reinit=True)
 
@@ -25,6 +26,7 @@ class TransformerModel:
         config = config["torch"]
         self.config = config
         self.epochs = int(config["epochs"])
+        self.batch_size = int(config["batch_size"])
         self.learning_rate = float(config["learning_rate"])
         self.max_len = int(config["max_len"])
         self.use_bfloat16 = True if config["bfloat16"] == "True" else False
@@ -86,6 +88,11 @@ class TransformerModel:
 
     def train(self, train_dataloader, dev_dataloader):
         print("Starting training...")
+
+        try:
+            print(summary(self.model, torch.zeros((self.batch_size, self.max_len), dtype=torch.long), show_input=True))
+        except:
+            print("Unable to print model summary.")
 
         self.model.to(self.device)
 

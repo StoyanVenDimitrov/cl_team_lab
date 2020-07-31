@@ -56,9 +56,7 @@ class MultitaskLearner(Model):
             self.embedding_layer = hub.KerasLayer("https://tfhub.dev/google/elmo/3", signature="tokens", output_key="elmo", trainable=False)
         elif self.embedding_type == "bert":
             print("Loading BERT embedding...")
-            # self.bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
-            #                 trainable=False)
-            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_cased_L-12_H-768_A-12/1",
+            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
                             trainable=False)
         elif self.embedding_type == "albert":
             print("Loading AlBERT embedding...")
@@ -397,9 +395,7 @@ class SingletaskLearner(Model):
             print("Loading ELMo embedding...")
             self.embedding_layer = hub.KerasLayer("https://tfhub.dev/google/elmo/3", signature="tokens", output_key="elmo", trainable=False)
         elif self.embedding_type == "bert":
-            # self.bert_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
-            #                 trainable=False)
-            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_cased_L-12_H-768_A-12/1",
+            self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
                             trainable=False)
         elif self.embedding_type == "albert":
             self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
@@ -409,14 +405,14 @@ class SingletaskLearner(Model):
                             trainable=False)
 
         self.logdir = utils.make_logdir("keras", "Singletask", pre_config, config)
-        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
+        # self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=self.logdir)
 
-        checkpoint_path = os.path.join(
-            self.logdir, os.pardir, "checkpoints/cp-{epoch:04d}.ckpt"
-        )
-        self.checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-            filepath=checkpoint_path, verbose=1, save_weights_only=True, save_freq=500
-        )
+        # checkpoint_path = os.path.join(
+        #     self.logdir, os.pardir, "checkpoints/cp-{epoch:04d}.ckpt"
+        # )
+        # self.checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+        #     filepath=checkpoint_path, verbose=1, save_weights_only=True, save_freq=500
+        # )
 
     def elmo_embedding(self, x):
         return self.elmo_layer(inputs={"tokens": tf.squeeze(tf.cast(x, tf.string)), "sequence_len": tf.constant(int(self.batch_size)*[self.max_seq_len])})
@@ -550,9 +546,9 @@ class SingletaskLearner(Model):
             epochs=self.number_of_epochs,
             callbacks=[
                 ValidateAfter(val_dataset, self.validation_step),
-                self.tensorboard_callback,
-                self.checkpoint_callback,
-            ],
+            #     self.tensorboard_callback,
+            #     self.checkpoint_callback,
+            # ],
         )
 
     def eval(self, dataset, save_output=True):

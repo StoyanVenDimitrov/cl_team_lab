@@ -21,18 +21,22 @@ def write_config(path, config1, config2):
 def make_filename(config):
     filename = "PARAMS=="
     for i, para in enumerate(config):
+        # print(para)
         sep = "&" if i > 0 else ""
         if "model_path" in para:
+            # print(para)
             continue
         elif "stopwords_path" in para:
             stopwords = config[para].split("/")[-1].split(".")[0]
             filename += f"{stopwords}-"
+            # print(para)
             continue
-        elif "path" in para or "dataset" in para:
+        elif "path" in para or "dataset" == para:
             continue
         elif para == "model_version":
-            para = para.replace("/", "_")
+            config[para] = config[para].replace("/", "+")
         filename += f"{sep}{para}={config[para]}"
+        # print(para)
     return filename
 
 
