@@ -2,6 +2,7 @@ import configparser
 import importlib
 import wandb
 import os
+import time
 
 
 def load_config(path):
@@ -41,12 +42,7 @@ def make_filename(config):
 
 
 def make_logdir(dir, _type, config1, config2):
-    filename1 = make_filename(config1)
-    filename2 = make_filename(config2)
-
-    logdir = os.path.join(
-        "saved_models", dir, _type + "_" + filename1 + "_" + filename2, "logs"
-    )
+    logdir = os.path.join("saved_models", time.strftime("%Y%m%d-%H%M%S"), "logs")
     if not os.path.isdir(logdir):
         os.makedirs(logdir)
 

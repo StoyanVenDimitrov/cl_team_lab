@@ -2,7 +2,6 @@
 import os
 import json
 import tensorflow_datasets as tfds
-import tensorflow as tf
 from nltk.stem import WordNetLemmatizer
 import random
 import spacy
@@ -139,6 +138,11 @@ class SciciteReader:
             with open(file, "r") as data_file:
                 data = [json.loads(x) for x in list(data_file)]
                 tdt.append(data)
+        
+        if self.do_balance_dataset:
+            tdt[0] = self.balance_dataset(tdt[0])
+            tdt[1] = self.balance_dataset(tdt[1])
+
         return tdt
 
     def lemmatize_sentence(self, sentence):

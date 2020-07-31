@@ -2,9 +2,7 @@
 import warnings
 import os
 
-warnings.filterwarnings(
-    "ignore", category=FutureWarning
-)  # ignores warnings about future version of numpy
+warnings.filterwarnings("ignore", category=FutureWarning)  # ignores warnings about future version of numpy
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import tensorflow as tf
@@ -217,11 +215,11 @@ class MultitaskLearner(Model):
         self.model.fit(
             dataset,
             epochs=self.number_of_epochs,
-            # callbacks=[
+            callbacks=[
             #     ValidateAfter(val_dataset, self.validation_step),
                 # self.tensorboard_callback,
                 # self.checkpoint_callback,
-            # ],
+            ],
         )
 
     def eval(self, dataset, save_output=True):
@@ -449,12 +447,6 @@ class SingletaskLearner(Model):
                 state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
                 
         elif self.embedding_type in ["bert", "albert"]:
-            # if self.embedding_type == "bert":
-            #     self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
-            #                     trainable=True)
-            # else:
-            #     self.embedding_layer = hub.KerasLayer("https://tfhub.dev/tensorflow/albert_en_large/1",
-            #                   trainable=True)
 
             input_word_ids = tf.keras.layers.Input(shape=(self.max_seq_len,), dtype=tf.int32,
                                                name="input_word_ids")
@@ -490,8 +482,6 @@ class SingletaskLearner(Model):
             state_h
         )
 
-
-
         if self.embedding_type == "lstm":
             self.model = tf.keras.Model(
                 inputs=text_input_layer,
@@ -514,8 +504,6 @@ class SingletaskLearner(Model):
                 inputs=text_input_layer,
                 outputs=label_output
             )
-
-        # self.model = tf.keras.Model(inputs=text_input_layer, outputs=label_output)
 
         self.model.summary()
         tf.keras.utils.plot_model(
@@ -548,7 +536,7 @@ class SingletaskLearner(Model):
                 ValidateAfter(val_dataset, self.validation_step),
             #     self.tensorboard_callback,
             #     self.checkpoint_callback,
-            # ],
+            ],
         )
 
     def eval(self, dataset, save_output=True):

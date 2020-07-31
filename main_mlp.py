@@ -8,13 +8,10 @@ from sklearn.metrics import classification_report
 
 # pylint:skip-file
 
-config = configparser.ConfigParser()
-config.read("configs/mlp/default.conf")
-
 
 class Trainer:
-    def __init__(self, params):
-        self.params = params
+    def __init__(self, args, config):
+        self.args = args
         # find the components of the trainer:
         vectorizer_section = config[config["trainer"]["vectorizer"]]
         classifier_section = config[config["trainer"]["classifier"]]
@@ -23,7 +20,7 @@ class Trainer:
         classifier_class = utils.import_module(classifier_section["module"])
         # instantiate objects of the wished components:
         self.vectorizer = vectorizer_class(vectorizer_section)
-        self.classifier = classifier_class(classifier_section, self.params)
+        self.classifier = classifier_class(classifier_section, self.args)
 
         self.reader = SciciteReader(config["preprocessor"])
         self.train_set, self.dev_set, self.test_set = self.reader.load_tdt()
@@ -57,7 +54,7 @@ class Trainer:
         self.classifier.train(train_set_inputs, dev_set_inputs)
         self.statistics = self.classifier.get_train_statistics()
 
-        if self.params.log_metrics:
+        if self.args.log_metrics:
             for i in range(len(self.statistics["macro_f1"])):
                 mlflow.log_metric("Dev Macro F1", self.statistics["macro_f1"][i])
                 mlflow.log_metric("Dev Micro F1", self.statistics["micro_f1"][i])
@@ -77,7 +74,7 @@ class Trainer:
         report = classification_report(labeled, predicted, ["background", "method", "result"], output_dict=True)
         print(report)
 
-        if self.params.log_metrics:
+        if self.args.log_metrics:
             mlflow.log_metric("Test Macro F1", macro_f1)
             mlflow.log_metric("Test Micro F1", micro_f1)
 
@@ -85,7 +82,7 @@ class Trainer:
 
 
 class Predictor:
-    def __init__(self):
+    def __init__(self, config):
         # find the components of the trainer:
         vectorizer_section = config[config["predictor"]["vectorizer"]]
         classifier_section = config[config["predictor"]["classifier"]]
@@ -129,14 +126,24 @@ if __name__ == "__main__":
         default=True,
         help="Set to True if training features, else set to False.",
     )
+    parser.add_argument(
+        "--config",
+        required=False,
+        default="configs/mlp/default.conf",
+        help="Path to configuration file.",
+    )
 
     args = parser.parse_args()
+
+    config = configparser.ConfigParser()
+    config.read(args.config)
 
     if args.log_metrics:
         mlflow.start_run()
         mlflow.log_params(utils.get_log_params(config))
+    
+    trainer = Trainer(args, config)
 
-    trainer = Trainer(args)
     if args.train_features:
         trainer.train_feature_extractor()
     if args.train:

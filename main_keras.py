@@ -120,6 +120,7 @@ class Trainer:
 
         print("Evaluating...")
         keras_model.eval(test_dataset, save_output=True)
+        keras_model.eval(test_dataset, save_output=False)
 
         end_time = time.time()
         total_time = end_time - start_time
@@ -244,15 +245,13 @@ class Trainer:
 def run(args, config):
     if args.train:
         trainer = Trainer(args, config)
-        trainer.keras_singletask(args)
-        # print(config.sections())
-        # if "multitask_trainer" in config:
-        #     print("Running multitask trainer...")
-        #     trainer.keras_multitask(args)
-        #     tf.keras.backend.clear_session()
-        # if "singletask_trainer" in config:
-        #     print("Running singletask trainer...")
-        #     trainer.keras_singletask(args)
+        if "multitask_trainer" in config:
+            print("Running multitask trainer...")
+            trainer.keras_multitask(args)
+            tf.keras.backend.clear_session()
+        if "singletask_trainer" in config:
+            print("Running singletask trainer...")
+            trainer.keras_singletask(args)
 
 
 if __name__ == "__main__":
