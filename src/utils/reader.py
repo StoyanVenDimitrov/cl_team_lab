@@ -29,18 +29,18 @@ class SciciteReaderNLP:
             for obj in reader:
                 obj["label"] = labels[obj["label"]]
                 json_data.append(obj)
-            
+
         df = pd.DataFrame(json_data)
 
         return nlp.Dataset.from_pandas(df)
-    
+
     def preprocess_data(self):
         print("Processing data...")
 
         train_file = os.path.join(self.data_dir, "train.jsonl")
         dev_file = os.path.join(self.data_dir, "dev.jsonl")
         test_file = os.path.join(self.data_dir, "test.jsonl")
-        
+
         train = self.load_dataset(train_file)
         dev = self.load_dataset(dev_file)
         test = self.load_dataset(test_file)
@@ -49,7 +49,7 @@ class SciciteReaderNLP:
             train, dev = self.balance_data(train), self.balance_data(dev)
 
         return train, dev, test
-        
+
     def balance_data(self, dataset):
         print("Balancing data...")
         class0 = []
@@ -138,7 +138,7 @@ class SciciteReader:
             with open(file, "r") as data_file:
                 data = [json.loads(x) for x in list(data_file)]
                 tdt.append(data)
-        
+
         if self.do_balance_dataset:
             tdt[0] = self.balance_dataset(tdt[0])
             tdt[1] = self.balance_dataset(tdt[1])
@@ -195,7 +195,6 @@ class SciciteReader:
             data = [json.loads(x) for x in list(data_file)]
 
         if _type in ["dev", "train"]:
-            # lemmatize and lowercase data
             if self.lemmatize:
                 if "lemmatized_string" in data[0]:
                     data = self.preprocess_data(data, lowercase=self.lowercase)
@@ -217,11 +216,8 @@ class SciciteReader:
             tokens = self.tokenizer.tokenize(sample[key])
             self.vocab_set.update(tokens)
             sample["tokens"] = tokens
-            # self.labels_set.update([sample["label"]])
             sample["relevant_key"] = "label"
-            # sample["text"] = [sample["string"]]
         return data
-        # return data[:1000]  # TODO remove
 
     def load_scaffold(self, scaffold):
         """
@@ -242,9 +238,7 @@ class SciciteReader:
         with open(file, "r") as scaffold_file:
             data = [json.loads(x) for x in list(scaffold_file)]
         for sample in data:
-            # sample["text"] = [sample["text"]]
             if scaffold == "cite":
-                # self.worthiness_set.update([str(sample["is_citation"])])
                 sample["relevant_key"] = "is_citation"
                 sample["is_citation"] = str(sample["is_citation"])
             else:
@@ -286,10 +280,8 @@ class SciciteReader:
             _text = ""
             if "text" in sample.keys():
                 _text = sample["text"]
-                # text.append(sample['text'])
             elif "string" in sample.keys():
                 _text = sample["string"]
-                # text.append(sample['string'])
 
             if self.lowercase:
                 _text = _text.lower()

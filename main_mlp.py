@@ -70,8 +70,14 @@ class Trainer:
         macro_f1 = custom_macro_f1_score(predicted, labeled)
         micro_f1 = custom_micro_f1_score(predicted, labeled)
 
-        print(classification_report(labeled, predicted, ["background", "method", "result"]))
-        report = classification_report(labeled, predicted, ["background", "method", "result"], output_dict=True)
+        print(
+            classification_report(
+                labeled, predicted, ["background", "method", "result"]
+            )
+        )
+        report = classification_report(
+            labeled, predicted, ["background", "method", "result"], output_dict=True
+        )
         print(report)
 
         if self.args.log_metrics:
@@ -141,7 +147,7 @@ if __name__ == "__main__":
     if args.log_metrics:
         mlflow.start_run()
         mlflow.log_params(utils.get_log_params(config))
-    
+
     trainer = Trainer(args, config)
 
     if args.train_features:

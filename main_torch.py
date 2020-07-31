@@ -15,7 +15,9 @@ def run(args, config):
     train, dev, test = reader.preprocess_data()
 
     model = TransformerModel(args, config)
-    train_dataloader, dev_dataloader, test_dataloader = model.prepare_data(train, dev, test, int(config["torch"]["batch_size"]))
+    train_dataloader, dev_dataloader, test_dataloader = model.prepare_data(
+        train, dev, test, int(config["torch"]["batch_size"])
+    )
 
     if args.train:
         model.train(train_dataloader, dev_dataloader)

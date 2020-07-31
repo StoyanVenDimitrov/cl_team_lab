@@ -16,6 +16,7 @@ class Trainer:
     """
     Trainer class for the keras implementation
     """
+
     def __init__(self, args, config):
         self.args = args
         self.config = config
@@ -35,16 +36,28 @@ class Trainer:
 
         reader = SciciteReader(self.config["preprocessor"])
         print("Loading data...")
-        text, labels, sections, worthiness = reader.load_data(_type="train", multitask=True)
+        text, labels, sections, worthiness = reader.load_data(
+            _type="train", multitask=True
+        )
         text_dev, labels_dev, _, _ = reader.load_data(_type="dev", multitask=False)
         text_test, labels_test, _, _ = reader.load_data(_type="test", multitask=False)
 
         keras_model = MultitaskLearner(self.config)
 
         if embedding_type == "bert" or embedding_type == "albert":
-           input_ids, input_masks, input_segments = keras_model.prepare_input_data(text)
-           dev_input_ids, dev_input_masks, dev_input_segments = keras_model.prepare_input_data(text_dev)
-           test_input_ids, test_input_masks, test_input_segments = keras_model.prepare_input_data(text_test)
+            input_ids, input_masks, input_segments = keras_model.prepare_input_data(
+                text
+            )
+            (
+                dev_input_ids,
+                dev_input_masks,
+                dev_input_segments,
+            ) = keras_model.prepare_input_data(text_dev)
+            (
+                test_input_ids,
+                test_input_masks,
+                test_input_segments,
+            ) = keras_model.prepare_input_data(text_test)
 
         print("Preparing data...")
         text_tensor, text_tokenizer = keras_model.prepare_data(text, max_len=max_len)
@@ -52,9 +65,13 @@ class Trainer:
         sections_tensor, sections_tokenizer = keras_model.prepare_data(sections)
         worthiness_tensor, worthiness_tokenizer = keras_model.prepare_data(worthiness)
 
-        text_tensor_dev = keras_model.prepare_dev_data(text_dev, text_tokenizer, max_len=max_len)
+        text_tensor_dev = keras_model.prepare_dev_data(
+            text_dev, text_tokenizer, max_len=max_len
+        )
         labels_tensor_dev = keras_model.prepare_dev_data(labels_dev, labels_tokenizer)
-        text_tensor_test = keras_model.prepare_dev_data(text_test, text_tokenizer, max_len=max_len)
+        text_tensor_test = keras_model.prepare_dev_data(
+            text_test, text_tokenizer, max_len=max_len
+        )
         labels_tensor_test = keras_model.prepare_dev_data(labels_test, labels_tokenizer)
 
         print("Creating datasets...")
@@ -66,21 +83,21 @@ class Trainer:
                 worthiness=worthiness_tensor,
                 ids=None,
                 mask=None,
-                segments=None
+                segments=None,
             )
             dev_dataset = keras_model.create_dev_dataset(
                 text=text_tensor_dev,
                 ids=None,
                 mask=None,
                 segments=None,
-                labels=labels_tensor_dev
+                labels=labels_tensor_dev,
             )
             test_dataset = keras_model.create_dev_dataset(
                 text=text_tensor_test,
                 ids=None,
                 mask=None,
                 segments=None,
-                labels=labels_tensor_test
+                labels=labels_tensor_test,
             )
         elif embedding_type == "bert" or embedding_type == "albert":
             dataset = keras_model.create_dataset(
@@ -90,24 +107,24 @@ class Trainer:
                 worthiness=worthiness_tensor,
                 ids=input_ids,
                 mask=input_masks,
-                segments=input_segments
+                segments=input_segments,
             )
             dev_dataset = keras_model.create_dev_dataset(
                 text=None,
                 ids=dev_input_ids,
                 mask=dev_input_masks,
                 segments=dev_input_segments,
-                labels=labels_tensor_dev
+                labels=labels_tensor_dev,
             )
             test_dataset = keras_model.create_dev_dataset(
                 text=None,
                 ids=test_input_ids,
                 mask=test_input_masks,
                 segments=test_input_segments,
-                labels=labels_tensor_test
+                labels=labels_tensor_test,
             )
 
-        vocab_size = len(text_tokenizer.word_index.keys())+1
+        vocab_size = len(text_tokenizer.word_index.keys()) + 1
         labels_size = len(labels_tokenizer.word_index.keys())
         section_size = len(sections_tokenizer.word_index.keys())
         worthiness_size = len(worthiness_tokenizer.word_index.keys())
@@ -151,58 +168,56 @@ class Trainer:
         keras_model = SingletaskLearner(self.config)
 
         if embedding_type == "bert" or embedding_type == "albert":
-           input_ids, input_masks, input_segments = keras_model.prepare_input_data(text)
-           dev_input_ids, dev_input_masks, dev_input_segments = keras_model.prepare_input_data(text_dev)
-           test_input_ids, test_input_masks, test_input_segments = keras_model.prepare_input_data(text_test)
+            input_ids, input_masks, input_segments = keras_model.prepare_input_data(
+                text
+            )
+            (
+                dev_input_ids,
+                dev_input_masks,
+                dev_input_segments,
+            ) = keras_model.prepare_input_data(text_dev)
+            (
+                test_input_ids,
+                test_input_masks,
+                test_input_segments,
+            ) = keras_model.prepare_input_data(text_test)
 
         print("Preparing data...")
-        text_tensor, text_tokenizer = keras_model.prepare_data(
-            text, max_len=max_len,
-        )
+        text_tensor, text_tokenizer = keras_model.prepare_data(text, max_len=max_len,)
         labels_tensor, labels_tokenizer = keras_model.prepare_data(labels)
 
         text_tensor_dev = keras_model.prepare_dev_data(
-            text_dev,
-            text_tokenizer,
-            max_len=max_len,
+            text_dev, text_tokenizer, max_len=max_len,
         )
         labels_tensor_dev = keras_model.prepare_dev_data(labels_dev, labels_tokenizer)
 
         text_tensor_test = keras_model.prepare_dev_data(
-            text_test,
-            text_tokenizer,
-            max_len=max_len,
+            text_test, text_tokenizer, max_len=max_len,
         )
         labels_tensor_test = keras_model.prepare_dev_data(labels_test, labels_tokenizer)
 
         print("Creating datasets...")
-        # dataset = keras_model.create_dataset(text_tensor, labels_tensor)
-        # dev_dataset = keras_model.create_dev_dataset(text_tensor_dev, labels_tensor_dev)
-        # test_dataset = keras_model.create_dev_dataset(
-        #     text_tensor_test, labels_tensor_test
-        # )
-
         if embedding_type == "lstm":
             dataset = keras_model.create_dataset(
                 text=text_tensor,
                 ids=None,
                 mask=None,
                 segments=None,
-                labels=labels_tensor
+                labels=labels_tensor,
             )
             dev_dataset = keras_model.create_dev_dataset(
                 text=text_tensor_dev,
                 ids=None,
                 mask=None,
                 segments=None,
-                labels=labels_tensor_dev
+                labels=labels_tensor_dev,
             )
             test_dataset = keras_model.create_dev_dataset(
                 text=text_tensor_test,
                 ids=None,
                 mask=None,
                 segments=None,
-                labels=labels_tensor_test
+                labels=labels_tensor_test,
             )
         elif embedding_type == "bert" or embedding_type == "albert":
             dataset = keras_model.create_dataset(
@@ -210,7 +225,7 @@ class Trainer:
                 ids=input_ids,
                 mask=input_masks,
                 segments=input_segments,
-                labels=labels_tensor
+                labels=labels_tensor,
             )
 
             dev_dataset = keras_model.create_dev_dataset(
@@ -218,17 +233,17 @@ class Trainer:
                 ids=dev_input_ids,
                 mask=dev_input_masks,
                 segments=dev_input_segments,
-                labels=labels_tensor_dev
+                labels=labels_tensor_dev,
             )
             test_dataset = keras_model.create_dev_dataset(
                 text=None,
                 ids=test_input_ids,
                 mask=test_input_masks,
                 segments=test_input_segments,
-                labels=labels_tensor_test
+                labels=labels_tensor_test,
             )
 
-        vocab_size = len(text_tokenizer.word_index.keys())+1
+        vocab_size = len(text_tokenizer.word_index.keys()) + 1
         labels_size = len(labels_tokenizer.word_index.keys())
 
         print("Creating model...")

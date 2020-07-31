@@ -1,6 +1,7 @@
 import configparser
 import importlib
-import wandb
+
+# import wandb
 import os
 import time
 
@@ -34,22 +35,18 @@ def write_config(path, config1, config2):
 def make_filename(config):
     filename = "PARAMS=="
     for i, para in enumerate(config):
-        # print(para)
         sep = "&" if i > 0 else ""
         if "model_path" in para:
-            # print(para)
             continue
         elif "stopwords_path" in para:
             stopwords = config[para].split("/")[-1].split(".")[0]
             filename += f"{stopwords}-"
-            # print(para)
             continue
         elif "path" in para or "dataset" == para:
             continue
         elif para == "model_version":
             config[para] = config[para].replace("/", "+")
         filename += f"{sep}{para}={config[para]}"
-        # print(para)
     return filename
 
 
@@ -96,76 +93,76 @@ def get_log_params(config):
     return params
 
 
-def wandb_init(config, _type="model"):
-    if _type == "model":
-        wandb.init(
-            config={
-                "model_version": config["model_version"],
-                "epochs": int(config["epochs"]),
-                "batch_size": int(config["batch_size"]),
-                "max_len": int(config["max_len"]),
-                "learning_rate": float(config["learning_rate"]),
-                "bfloat16": config["bfloat16"]
-            }, reinit=True
-        )
-    elif _type == "preprocess":
-        wandb.init(
-            config={
-                "lemmatize": config["lemmatize"],
-                "lowercase": config["lowercase"],
-                "balance_dataset": config["balance_dataset"],
-                "shuffle_data": config["shuffle_data"]
-            }, reinit=True
-        )
+# def wandb_init(config, _type="model"):
+#     if _type == "model":
+#         wandb.init(
+#             config={
+#                 "model_version": config["model_version"],
+#                 "epochs": int(config["epochs"]),
+#                 "batch_size": int(config["batch_size"]),
+#                 "max_len": int(config["max_len"]),
+#                 "learning_rate": float(config["learning_rate"]),
+#                 "bfloat16": config["bfloat16"]
+#             }, reinit=True
+#         )
+#     elif _type == "preprocess":
+#         wandb.init(
+#             config={
+#                 "lemmatize": config["lemmatize"],
+#                 "lowercase": config["lowercase"],
+#                 "balance_dataset": config["balance_dataset"],
+#                 "shuffle_data": config["shuffle_data"]
+#             }, reinit=True
+#         )
 
 
-def wandb_init_metrics():
-     wandb.init(
-        config={
-            "train_accuracy": 0.0,
-            "train_f1": 0.0,
-            "val_macro_avg_precision": 0.0,
-            "val_macro_avg_recall": 0.0,
-            "val_macro_avg_f1-score": 0.0,
-            "val_class_0_precision": 0.0,
-            "val_class_0_recall": 0.0,
-            "val_class_0_f1-score": 0.0,
-            "val_class_1_precision": 0.0,
-            "val_class_1_recall": 0.0,
-            "val_class_1_f1-score": 0.0,
-            "val_class_2_precision": 0.0,
-            "val_class_2_recall": 0.0,
-            "val_class_2_f1-score": 0.0,
-            "test_macro_avg_precision": 0.0,
-            "test_macro_avg_recall": 0.0,
-            "test_macro_avg_f1-score": 0.0,
-            "test_class_0_precision": 0.0,
-            "test_class_0_recall": 0.0,
-            "test_class_0_f1-score": 0.0,
-            "test_class_1_precision": 0.0,
-            "test_class_1_recall": 0.0,
-            "test_class_1_f1-score": 0.0,
-            "test_class_2_precision": 0.0,
-            "test_class_2_recall": 0.0,
-            "test_class_2_f1-score": 0.0,
-        }, reinit=True
-    )
+# def wandb_init_metrics():
+#      wandb.init(
+#         config={
+#             "train_accuracy": 0.0,
+#             "train_f1": 0.0,
+#             "val_macro_avg_precision": 0.0,
+#             "val_macro_avg_recall": 0.0,
+#             "val_macro_avg_f1-score": 0.0,
+#             "val_class_0_precision": 0.0,
+#             "val_class_0_recall": 0.0,
+#             "val_class_0_f1-score": 0.0,
+#             "val_class_1_precision": 0.0,
+#             "val_class_1_recall": 0.0,
+#             "val_class_1_f1-score": 0.0,
+#             "val_class_2_precision": 0.0,
+#             "val_class_2_recall": 0.0,
+#             "val_class_2_f1-score": 0.0,
+#             "test_macro_avg_precision": 0.0,
+#             "test_macro_avg_recall": 0.0,
+#             "test_macro_avg_f1-score": 0.0,
+#             "test_class_0_precision": 0.0,
+#             "test_class_0_recall": 0.0,
+#             "test_class_0_f1-score": 0.0,
+#             "test_class_1_precision": 0.0,
+#             "test_class_1_recall": 0.0,
+#             "test_class_1_f1-score": 0.0,
+#             "test_class_2_precision": 0.0,
+#             "test_class_2_recall": 0.0,
+#             "test_class_2_f1-score": 0.0,
+#         }, reinit=True
+#     )
 
 
-def wandb_log_report(_type, report):
-    wandb.log(
-        {
-            f"{_type}_macro_avg_precision": report["macro avg"]["precision"],
-            f"{_type}_macro_avg_recall": report["macro avg"]["recall"],
-            f"{_type}_macro_avg_f1-score": report["macro avg"]["f1-score"],
-            f"{_type}_class_0_precision": report["0"]["precision"],
-            f"{_type}_class_0_recall": report["0"]["recall"],
-            f"{_type}_class_0_f1-score": report["0"]["f1-score"],
-            f"{_type}_class_1_precision": report["1"]["precision"],
-            f"{_type}_class_1_recall": report["1"]["recall"],
-            f"{_type}_class_1_f1-score": report["1"]["f1-score"],
-            f"{_type}_class_2_precision": report["2"]["precision"],
-            f"{_type}_class_2_recall": report["2"]["recall"],
-            f"{_type}_class_2_f1-score": report["2"]["f1-score"],
-        }
-    )
+# def wandb_log_report(_type, report):
+#     wandb.log(
+#         {
+#             f"{_type}_macro_avg_precision": report["macro avg"]["precision"],
+#             f"{_type}_macro_avg_recall": report["macro avg"]["recall"],
+#             f"{_type}_macro_avg_f1-score": report["macro avg"]["f1-score"],
+#             f"{_type}_class_0_precision": report["0"]["precision"],
+#             f"{_type}_class_0_recall": report["0"]["recall"],
+#             f"{_type}_class_0_f1-score": report["0"]["f1-score"],
+#             f"{_type}_class_1_precision": report["1"]["precision"],
+#             f"{_type}_class_1_recall": report["1"]["recall"],
+#             f"{_type}_class_1_f1-score": report["1"]["f1-score"],
+#             f"{_type}_class_2_precision": report["2"]["precision"],
+#             f"{_type}_class_2_recall": report["2"]["recall"],
+#             f"{_type}_class_2_f1-score": report["2"]["f1-score"],
+#         }
+#     )
