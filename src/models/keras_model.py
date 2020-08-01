@@ -125,6 +125,8 @@ class MultitaskLearner(KerasModel):
     """Multitask learning environment for citation classification (main task) and citation section title (auxiliary)"""
 
     def __init__(self, config):
+        pre_config = config["preprocessor"]
+        config = config["multitask_trainer"]
         super().__init__(config)
         self.embedding_dim = int(config["embedding_dim"])
         self.use_attention = True if config["use_attention"] == "True" else False
