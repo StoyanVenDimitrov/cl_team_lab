@@ -41,6 +41,7 @@ class TransformerModel:
         self.logdir = utils.make_logdir("torch", "Torch", self.pre_config, config)
 
     def init_model(self):
+        """initialize model configuration"""
         print("Initializing model...")
         configurator, tokenizer, model = MODELS[self.model_type]
 
@@ -54,6 +55,7 @@ class TransformerModel:
         print("Model initialized!")
 
     def encode(self, text):
+        """encode and tokenize input"""
         if self.pre_config["lemmatize"] == "True":
             if "lemmatized_string" in text.keys():
                 key = "lemmatized_string"
@@ -68,6 +70,7 @@ class TransformerModel:
         )
 
     def prepare_data(self, train, dev, test, batch_size=8):
+        """create dataloader objects for datasets"""
         print("Preparing data...")
         train_tokens = train.map(self.encode, batched=True)
         dev_tokens = dev.map(self.encode, batched=True)
@@ -99,6 +102,7 @@ class TransformerModel:
         return train_dataloader, dev_dataloader, test_dataloader
 
     def train(self, train_dataloader, dev_dataloader):
+        """train model and evaluate performance on development set"""
         print("Starting training...")
 
         try:
@@ -183,6 +187,7 @@ class TransformerModel:
         torch.save(self.model.state_dict(), save_path)
 
     def evaluate(self, dataloader, save_output=True):
+        """evaluate model on test set and save results"""
         print("Evaluating...")
 
         self.model.eval()
@@ -222,6 +227,7 @@ class TransformerModel:
         #     utils.wandb_log_report("test", test_report)
 
     def init_logging(self, config):
+        """initialize logging parameters"""
         if self.args.log_metrics:
             wandb.init(
                 project="citent-torch",

@@ -33,6 +33,7 @@ def write_config(path, config1, config2):
 
 
 def make_filename(config):
+    """create file name out of configuration parameters"""
     filename = "PARAMS=="
     for i, para in enumerate(config):
         sep = "&" if i > 0 else ""
@@ -51,6 +52,7 @@ def make_filename(config):
 
 
 def make_logdir(dir, _type, config1, config2):
+    """create logging directory for saving models, logs, and results"""
     logdir = os.path.join("saved_models", time.strftime("%Y%m%d-%H%M%S"), "logs")
     if not os.path.isdir(logdir):
         os.makedirs(logdir)
@@ -76,6 +78,7 @@ def import_module(dotted_path):
 
 
 def format_time(start_seconds, end_seconds):
+    """convert seconds into human-readable format"""
     seconds = end_seconds - start_seconds
     days, rem = divmod(seconds, 24 * 3600)
     hours, rem = divmod(rem, 3600)
@@ -86,6 +89,7 @@ def format_time(start_seconds, end_seconds):
 
 
 def get_log_params(config):
+    """extract parameters from configuration file"""
     params = {}
     for sec in config:
         for k, v in config[sec].items():
