@@ -219,7 +219,7 @@ class MultitaskLearner(KerasModel):
             )
 
             if self.use_attention:
-                state_h = WeirdAttention(self.attention_size)(sequence_output)
+                state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
             else:
                 state_h = pooled_output
 
@@ -431,7 +431,7 @@ class SingletaskLearner(KerasModel):
             )
 
             if self.use_attention:
-                state_h = WeirdAttention(self.attention_size)(sequence_output)
+                state_h = WeirdAttention(sequence_output.shape[-1])(sequence_output)
             else:
                 state_h = pooled_output
 
