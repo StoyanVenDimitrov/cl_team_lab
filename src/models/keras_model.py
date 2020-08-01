@@ -1,4 +1,4 @@
-"""NN model implementation with keras"""
+"""tf.Keras implementation of Cohen et al., 2019 for transformers"""
 import warnings
 import os
 
@@ -7,22 +7,21 @@ warnings.filterwarnings(
 )  # ignores warnings about future version of numpy
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
+import json
 import tensorflow as tf
+import tensorflow_addons as tfa
+import tensorflow_hub as hub
+import numpy as np
 from tensorflow.python.util import deprecation
 
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
-from src.models.model import Model
 from tensorflow.keras import backend as K
-import tensorflow_addons as tfa
-import tensorflow_hub as hub
 from sklearn.metrics import classification_report
-import numpy as np
-import json
-import bert
 from official.nlp.bert import tokenization
 
 from src.utils import utils
+from src.models.model import Model
 
 BUFFER_SIZE = 11000
 
@@ -30,11 +29,11 @@ BUFFER_SIZE = 11000
 class KerasModel(Model):
     def __init__(
         self, config
-    ):  # , vocab_size, labels_size, section_size, worthiness_size):
+    ):
         super().__init__(config)
 
     def prepare_output_data(self, data):
-        """tokenize and encode for label, section... """
+        """tokenize and encode for label, section... as tensors"""
         component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
 
         filtered_data = list(filter("__unknown__".__ne__, data))
@@ -46,6 +45,7 @@ class KerasModel(Model):
         return tensor, component_tokenizer
 
     def prepare_dev_data(self, data, tokenizer, max_len=None):
+        """prepare the dev set as tensors"""
         tensor = tokenizer.texts_to_sequences(data)
 
         tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor, padding="post")
@@ -54,7 +54,7 @@ class KerasModel(Model):
         return tensor
 
     def prepare_data(self, data, max_len=None):
-        """tokenize and encode for text, label, section... """
+        """tokenize and encode for text, label, section... as tensors"""
         component_tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token=1)
 
         filtered_data = list(filter("__unknown__".__ne__, data))
@@ -68,7 +68,7 @@ class KerasModel(Model):
         return tensor, component_tokenizer
 
     def prepare_input_data(self, data):
-        """prepare text input for BERT"""
+        """prepare text input for transformers as tensors """
         if self.embedding_type == "bert":
             vocab_file = (
                 self.embedding_layer.resolved_object.vocab_file.asset_path.numpy()
@@ -93,6 +93,7 @@ class KerasModel(Model):
         return input_ids, input_masks, input_segments
 
     def create_single_dataset(self, text, ids, mask, segments, labels):
+        """tf.Dataset when not using multi-task data"""
         if self.embedding_type == "lstm":
             dataset = tf.data.Dataset.from_tensor_slices((text, {"dense": labels}))
         elif self.embedding_type in ["bert", "albert"]:
@@ -109,6 +110,7 @@ class KerasModel(Model):
         return dataset
 
     def create_dev_dataset(self, text, ids, mask, segments, labels):
+        """tf.Dataset for the dev or test data"""
         if self.embedding_type in ["bert", "albert"]:
             return self.create_single_dataset(
                 text=None, ids=ids, mask=mask, segments=segments, labels=labels
@@ -139,15 +141,7 @@ class MultitaskLearner(KerasModel):
 
         self.embedding_type = config["embedding_type"]
 
-        if self.embedding_type == "elmo":
-            print("Loading ELMo embedding...")
-            self.embedding_layer = hub.KerasLayer(
-                "https://tfhub.dev/google/elmo/3",
-                signature="tokens",
-                output_key="elmo",
-                trainable=False,
-            )
-        elif self.embedding_type == "bert":
+        if self.embedding_type == "bert":
             print("Loading BERT embedding...")
             self.embedding_layer = hub.KerasLayer(
                 "https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
@@ -169,15 +163,8 @@ class MultitaskLearner(KerasModel):
             filepath=checkpoint_path, verbose=1, save_weights_only=True, save_freq=500
         )
 
-    def elmo_embedding(self, x):
-        return self.elmo_layer(
-            inputs={
-                "tokens": tf.squeeze(tf.cast(x, tf.string)),
-                "sequence_len": tf.constant(int(self.batch_size) * [self.max_seq_len]),
-            }
-        )
-
     def create_model(self, vocab_size, labels_size, section_size, worthiness_size):
+        """put together the model and compile"""
         self.labels_size, self.section_size, self.worthiness_size = (
             labels_size + 1,
             section_size + 1,
@@ -229,35 +216,10 @@ class MultitaskLearner(KerasModel):
                 [input_word_ids, input_mask, segment_ids]
             )
 
-            state_h = pooled_output
-
-        elif self.embedding_type == "elmo":
-            text_input_layer = tf.keras.layers.Input(
-                shape=(self.max_seq_len,), dtype="string"
-            )
-            input_embedding = self.elmo_embedding(text_input_layer)
-
-            (
-                output,
-                forward_h,
-                forward_c,
-                backward_h,
-                backward_c,
-            ) = tf.keras.layers.Bidirectional(
-                tf.keras.layers.LSTM(
-                    self.rnn_units,
-                    stateful=False,
-                    return_sequences=True,
-                    return_state=True,
-                    recurrent_initializer="glorot_uniform",
-                )
-            )(
-                input_embedding
-            )
             if self.use_attention:
-                state_h = WeirdAttention(self.attention_size)(output)
+                state_h = WeirdAttention(self.attention_size)(sequence_output)
             else:
-                state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
+                state_h = pooled_output
 
         label_output = tf.keras.layers.Dense(
             labels_size + 1, activation="softmax", name="dense"
@@ -280,34 +242,13 @@ class MultitaskLearner(KerasModel):
                 outputs=[label_output, section_output, worthiness_output],
             )
 
-        elif self.embedding_type == "elmo":
-            self.model = tf.keras.Model(
-                inputs=text_input_layer,
-                outputs=[label_output, section_output, worthiness_output],
-            )
-
         self.model.summary()
         tf.keras.utils.plot_model(
             self.model, to_file="multi_input_and_output_model.png", show_shapes=True
         )
 
-        def _masked_loss_function(y_true, y_pred):
-            mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
-            y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
-            # compare y_v len to find out the current type of labels and output the loss coeff or 1:
-            section_loss_weight = K.switch(
-                K.equal(y_v.shape[1], self.section_size), self.section_weight, 1.0
-            )
-            worthiness_loss_weight = K.switch(
-                K.equal(y_v.shape[1], self.worthiness_size), self.worthiness_weight, 1.0
-            )
-            # update the mask to scale with the needed factor:
-            mask = mask * section_loss_weight * worthiness_loss_weight
-            return K.categorical_crossentropy(
-                y_v * mask, K.clip(y_pred * mask, min_value=1e-15, max_value=1e10)
-            )
-
         def masked_loss_function(y_true, y_pred):
+            """create loss object for Cohen et al. multi-task objective"""
             mask = K.cast(K.not_equal(y_true, self.mask_value), K.floatx())
             y_v = K.one_hot(K.cast(K.flatten(y_true), tf.int32), y_pred.shape[1])
             # compare y_v len to find out the current type of labels and output the loss coeff or 1:
@@ -328,10 +269,11 @@ class MultitaskLearner(KerasModel):
             loss=masked_loss_function,
             metrics={
                 "dense": F1ForMultitask(num_classes=labels_size)
-            },  # , average='macro')}
+            }
         )
 
     def fit_model(self, dataset, val_dataset):
+        """Train the model and monitor performance on dev set"""
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
@@ -340,13 +282,14 @@ class MultitaskLearner(KerasModel):
             dataset,
             epochs=self.number_of_epochs,
             callbacks=[
-                #     ValidateAfter(val_dataset, self.validation_step),
+                ValidateAfter(val_dataset, self.validation_step),
                 # self.tensorboard_callback,
                 # self.checkpoint_callback,
             ],
         )
 
     def eval(self, dataset, save_output=True):
+        """evaluate the model"""
         batch_dataset = dataset.padded_batch(self.batch_size, drop_remainder=False)
 
         preds = self.model.predict(batch_dataset)
@@ -370,6 +313,7 @@ class MultitaskLearner(KerasModel):
             print("Saved result files results.json and results.txt to:", results_path)
 
     def create_dataset(self, text, labels, sections, worthiness, ids, mask, segments):
+        """create multi-task dataset"""
         if self.embedding_type in "lstm":
             dataset = tf.data.Dataset.from_tensor_slices(
                 (text, {"dense": labels, "dense_1": sections, "dense_2": worthiness})
@@ -413,15 +357,7 @@ class SingletaskLearner(KerasModel):
 
         self.embedding_type = config["embedding_type"]
 
-        if self.embedding_type == "elmo":
-            print("Loading ELMo embedding...")
-            self.embedding_layer = hub.KerasLayer(
-                "https://tfhub.dev/google/elmo/3",
-                signature="tokens",
-                output_key="elmo",
-                trainable=False,
-            )
-        elif self.embedding_type == "bert":
+        if self.embedding_type == "bert":
             self.embedding_layer = hub.KerasLayer(
                 "https://tfhub.dev/tensorflow/bert_en_uncased_L-12_H-768_A-12/1",
                 trainable=False,
@@ -445,16 +381,8 @@ class SingletaskLearner(KerasModel):
         #     filepath=checkpoint_path, verbose=1, save_weights_only=True, save_freq=500
         # )
 
-    def elmo_embedding(self, x):
-        return self.elmo_layer(
-            inputs={
-                "tokens": tf.squeeze(tf.cast(x, tf.string)),
-                "sequence_len": tf.constant(int(self.batch_size) * [self.max_seq_len]),
-            }
-        )
-
     def create_model(self, vocab_size, labels_size):
-
+        """put together the model and compile"""
         if self.embedding_type == "lstm":
             text_input_layer = tf.keras.Input(
                 shape=(None,), dtype=tf.int32, name="Input_1"
@@ -500,37 +428,11 @@ class SingletaskLearner(KerasModel):
                 [input_word_ids, input_mask, segment_ids]
             )
 
-            state_h = pooled_output
-
-        elif self.embedding_type == "elmo":
-            text_input_layer = tf.keras.layers.Input(
-                shape=(self.max_seq_len,), dtype="string"
-            )
-            input_embedding = tf.keras.layers.Lambda(
-                self.elmo_embedding, output_shape=(self.max_seq_len, 1024)
-            )(text_input_layer)
-
-            (
-                output,
-                forward_h,
-                forward_c,
-                backward_h,
-                backward_c,
-            ) = tf.keras.layers.Bidirectional(
-                tf.keras.layers.LSTM(
-                    self.rnn_units,
-                    stateful=False,
-                    return_sequences=True,
-                    return_state=True,
-                    recurrent_initializer="glorot_uniform",
-                )
-            )(
-                input_embedding
-            )
             if self.use_attention:
-                state_h = WeirdAttention(self.attention_size)(output)
+                state_h = WeirdAttention(self.attention_size)(sequence_output)
             else:
-                state_h = tf.keras.layers.Concatenate()([forward_h, backward_h])
+                state_h = pooled_output
+
 
         label_output = tf.keras.layers.Dense(labels_size + 1, activation="softmax")(
             state_h
@@ -547,9 +449,6 @@ class SingletaskLearner(KerasModel):
             self.model = tf.keras.Model(
                 inputs=[input_word_ids, input_mask, segment_ids], outputs=label_output
             )
-
-        elif self.embedding_type == "elmo":
-            self.model = tf.keras.Model(inputs=text_input_layer, outputs=label_output)
 
         self.model.summary()
         tf.keras.utils.plot_model(
@@ -571,6 +470,7 @@ class SingletaskLearner(KerasModel):
         )
 
     def fit_model(self, dataset, val_dataset):
+        """Train the model and monitor performance on dev set"""
         dataset = dataset.padded_batch(self.batch_size, drop_remainder=True)
         val_dataset = val_dataset.padded_batch(2, drop_remainder=True)
         dataset = dataset.shuffle(BUFFER_SIZE)
@@ -586,6 +486,7 @@ class SingletaskLearner(KerasModel):
         )
 
     def eval(self, dataset, save_output=True):
+        """evaluate the model"""
         batch_dataset = dataset.padded_batch(self.batch_size, drop_remainder=False)
 
         preds = self.model.predict(batch_dataset)
@@ -608,6 +509,7 @@ class SingletaskLearner(KerasModel):
             print("Saved result files results.json and results.txt to:", results_path)
 
     def create_dataset(self, text, ids, mask, segments, labels):
+        """single-task dataset"""
         if self.embedding_type in ["bert", "albert"]:
             return self.create_single_dataset(
                 text=None, ids=ids, mask=mask, segments=segments, labels=labels
@@ -625,14 +527,14 @@ class SingletaskLearner(KerasModel):
 
 
 def get_masks(tokens, max_seq_length):
-    """Mask for padding"""
+    """Transformers: Mask for padding"""
     if len(tokens) > max_seq_length:
         return [1] * max_seq_length
     return [1] * len(tokens) + [0] * (max_seq_length - len(tokens))
 
 
 def get_segments(tokens, max_seq_length):
-    """Segments: 0 for the first sequence, 1 for the second"""
+    """Transformers: Segments: 0 for the first sequence, 1 for the second"""
     segments = []
     current_segment_id = 0
     if len(tokens) > max_seq_length:
@@ -645,7 +547,7 @@ def get_segments(tokens, max_seq_length):
 
 
 def get_ids(tokens, tokenizer, max_seq_length):
-    """Token ids from Tokenizer vocab"""
+    """Transformers: Token ids from Tokenizer vocab"""
     token_ids = tokenizer.convert_tokens_to_ids(tokens)
     if len(tokens) > max_seq_length:
         return token_ids[:max_seq_length]
@@ -673,6 +575,7 @@ class WeirdAttention(tf.keras.layers.Layer):
 
 
 class ValidateAfter(tf.keras.callbacks.Callback):
+    """custom validation after val_step batches"""
     def __init__(self, val_data, val_step):
         super(ValidateAfter, self).__init__()
         self.val_data = (val_data,)
@@ -684,6 +587,7 @@ class ValidateAfter(tf.keras.callbacks.Callback):
 
 
 class F1ForMultitask(tfa.metrics.F1Score):
+    """Update on F1 score TF implementation for multi-task setting"""
     def __init__(
         self,
         num_classes,

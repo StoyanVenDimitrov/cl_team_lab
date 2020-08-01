@@ -10,6 +10,7 @@ from sklearn.metrics import classification_report
 
 
 class Trainer:
+    """trainer for the baseline"""
     def __init__(self, args, config):
         self.args = args
         # find the components of the trainer:
@@ -88,6 +89,7 @@ class Trainer:
 
 
 class Predictor:
+    """predictor from trained model for the baseline: returns label"""
     def __init__(self, config):
         # find the components of the trainer:
         vectorizer_section = config[config["predictor"]["vectorizer"]]
